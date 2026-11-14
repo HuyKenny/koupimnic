@@ -54,6 +54,18 @@ def shorten_mid(text, limit):
 NO_PROXY = ("sportisimo", "answear", "notino", "allegroimg")
 
 
+FILL_DEPTS = {"boty", "doplnky"}
+
+
+def photo_bg(url, cat=None):
+    """Answear shoots on a beige-grey studio wall whose shade differs photo to photo, so a fixed box colour still shows a
+    rectangle. Product shots (shoes, bags, watches) fill the square instead (is-fill, the 2:3 photo loses only wall);
+    model shots keep the whole photo on the average wall colour (is-gray)."""
+    if "ans-media.com" not in (url or ""):
+        return ""
+    return " is-gray is-fill" if cat and X.CATS.get(cat, ("", ""))[1] in FILL_DEPTS else " is-gray"
+
+
 def img_url(u, size="card"):
     """Smaller renditions via wsrv.nl (free image CDN, no CPU on our side); hosts that block it get the original.
     app.js (fixImg) falls back to the original when wsrv cannot deliver one."""
@@ -132,11 +144,12 @@ class Site:
 <a class="skip" href="#main">Přeskočit na obsah</a>
 <div class="sim">KoupímNic – nákupní galerie nanečisto. Ceny a produkty jsou skutečné, z českých e-shopů.</div>
 <header class="hd"><div class="wrap hd__in">
+<button class="hd__menu" type="button" data-drawer aria-label="Kategorie">{icon("menu", 22)}</button>
 <a class="logo" href="/" aria-label="KoupímNic – úvod"><img src="/img/ui/logo.webp" alt="KoupímNic" width="137" height="36"></a>
 <button class="hd__cats" type="button" data-mega aria-expanded="false" aria-controls="mega">{icon("menu", 20)}<span>Kategorie</span></button>
 <form class="search" action="/hledat/" role="search"><label class="sr" for="q">Hledat</label><input id="q" name="q" type="search" placeholder="Hledat mezi {self.stats.get("products_fmt", "tisíci")} produkty" autocomplete="off" enterkeyhint="search">
 <button type="submit" aria-label="Hledat">{icon("search", 20)}</button><div class="sugg" id="sugg" hidden></div></form>
-<a class="hd__save" href="/moje-uspory/" title="Moje úspory" data-saved-pill hidden>{icon("piggy", 22)}<span data-saved>0&nbsp;Kč</span></a>
+<a class="hd__save" href="/moje-uspory/" title="Neutraceno – moje úspory" aria-label="Moje úspory" data-saved-pill hidden>{icon("piggy", 22)}<small>Neutraceno</small><span data-saved>0&nbsp;Kč</span></a>
 <button class="hd__cart" type="button" data-open-cart aria-label="Košík">{icon("bag", 22)}<span class="hd__sum" data-sum>Košík</span><span class="badge" data-count hidden>0</span></button>
 </div><nav class="dn wrap" aria-label="Oddělení">{nav}</nav>
 <div class="mega" id="mega" hidden><div class="wrap mega__in" id="mega-in"></div></div></header>
@@ -171,7 +184,7 @@ Ceny a dostupnost přebíráme z e-shopů a mohou se změnit. Aktualizováno {se
         was = f'<s>{kc(p["was"])}</s>' if d >= 5 else ""
         img = img_url(p["img"], "card") or "/img/ui/placeholder.svg"
         data = E(json.dumps(self.item_data(p), ensure_ascii=False, separators=(",", ":")))
-        return (f'<article class="card"><a class="card__a" href="/produkt/{p["slug"]}/"><span class="card__img"><img src="{E(img)}" alt="" '
+        return (f'<article class="card"><a class="card__a" href="/produkt/{p["slug"]}/"><span class="card__img{photo_bg(p["img"], p["cat"])}"><img src="{E(img)}" alt="" '
                 f'{"loading=lazy " if lazy and not eager else ""}{"fetchpriority=high " if eager else ""}decoding="async" referrerpolicy="no-referrer" width="320" height="320" data-orig="{E(p["img"])}">{badge}</span>'
                 f'<span class="card__b">{E(p["brand"]) if p["brand"] else "&nbsp;"}</span><span class="card__n">{E(shorten(p["name"], 90))}</span></a>'
                 f'<div class="card__foot"><span class="card__p"><b>{kc(p["price"])}</b>{was}</span><span class="card__st">Skladem</span>'

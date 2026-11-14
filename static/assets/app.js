@@ -78,6 +78,12 @@
     if (e.target.closest("[data-open-cart]")) { openCart(); return; }
     if (e.target.closest("#cart [data-close]")) { closeCart(); return; }
     if (e.target.closest("[data-mega]")) { toggleMega(); return; }
+    if (e.target.closest("[data-drawer]")) { openDrawer(); return; }
+    var dd = e.target.closest("[data-drw-d]");
+    if (dd) { drawDrawer(+dd.getAttribute("data-drw-d")); return; }
+    if (e.target.closest("[data-drw-back]")) { drawDrawer(null); return; }
+    if (e.target.closest("[data-drw-x]")) { closeDrawer(); return; }
+    if (e.target.closest("[data-pill-x]")) { try { sessionStorage.setItem("knc:pillx", e.target.closest("[data-pill-x]").getAttribute("data-pill-x")); } catch (x) {} var op = $("#orderpill"); if (op) op.hidden = true; return; }
     if ($("#mega") && !$("#mega").hidden && !e.target.closest("#mega")) toggleMega(false);
     if (e.target.closest("[data-open-filters]")) { document.body.classList.add("filters-open"); return; }
     if (e.target.closest("[data-close-filters]")) { document.body.classList.remove("filters-open"); return; }
@@ -121,6 +127,41 @@
     });
   }
 
+  // ------------------------------------------------------------------ phone menu: departments -> categories with subcategories (same menu.json)
+  function withMenu(cb) {
+    if (menu) return cb();
+    fetch("/data/menu.json").then(function (r) { return r.json(); }).then(function (j) { menu = j; cb(); }).catch(function () {});
+  }
+  function openDrawer() {
+    var d = $("#drw");
+    if (!d) {
+      d = document.createElement("div"); d.id = "drw"; d.className = "drw";
+      d.setAttribute("role", "dialog"); d.setAttribute("aria-modal", "true"); d.setAttribute("aria-label", "Kategorie");
+      document.body.appendChild(d);
+    }
+    d.hidden = false; document.body.classList.add("drw-open");
+    d.innerHTML = '<div class="drw__h"><b>Kategorie</b><button type="button" data-drw-x aria-label="Zavřít">' + ICON("x", 20) + '</button></div><div class="drw__b"><p class="muted">Načítám…</p></div>';
+    withMenu(function () { drawDrawer(null); });
+  }
+  function closeDrawer() { var d = $("#drw"); if (d) d.hidden = true; document.body.classList.remove("drw-open"); }
+  function drawDrawer(i) {
+    var d = $("#drw"); if (!d || !menu) return;
+    var x = '<button type="button" data-drw-x aria-label="Zavřít">' + ICON("x", 20) + "</button>";
+    if (i === null) {
+      d.innerHTML = '<div class="drw__h"><b>Kategorie</b>' + x + '</div><div class="drw__b"><ul>' + menu.map(function (m, k) {
+        return '<li><button class="drw__row" type="button" data-drw-d="' + k + '"><img src="/img/ic/' + m[2] + '.webp" alt="" width="36" height="36">' + esc(m[1]) + ICON("chev", 18) + "</button></li>";
+      }).join("") + "</ul></div>";
+    } else {
+      var m = menu[i];
+      d.innerHTML = '<div class="drw__h"><button type="button" data-drw-back aria-label="Zpět">' + '<svg class="i" width="20" height="20" aria-hidden="true" style="transform:scaleX(-1)"><use href="/img/ui/icons.svg#chev"/></svg>' + "</button><b>" + esc(m[1]) + "</b>" + x + '</div><div class="drw__b">'
+        + '<a class="drw__all" href="/' + m[0] + '/">Vše z oddělení ' + esc(m[1]) + ICON("arrow", 16) + "</a><ul>" + m[3].map(function (c) {
+          return '<li><a class="drw__row" href="/' + c[0] + '/"><img src="/img/ic/' + c[3] + '.webp" alt="" width="36" height="36" loading="lazy">' + esc(c[1]) + "</a>"
+            + (c[4].length ? '<div class="drw__subs">' + c[4].slice(0, 8).map(function (s) { return '<a href="/' + c[0] + "/" + s[0] + '/">' + esc(s[1]) + "</a>"; }).join("") + "</div>" : "") + "</li>";
+        }).join("") + "</ul></div>";
+    }
+    var b = $(".drw__b", d); if (b) b.scrollTop = 0;
+  }
+
   // ------------------------------------------------------------------ drawer
   function linesHtml(c, editable) {
     return '<ul class="lines">' + c.map(function (x) {
@@ -153,6 +194,7 @@
     if (e.key !== "Escape") return;
     if ($("#cart") && !$("#cart").hidden) closeCart();
     if ($("#mega") && !$("#mega").hidden) toggleMega(false);
+    if ($("#drw") && !$("#drw").hidden) closeDrawer();
     document.body.classList.remove("filters-open");
   });
 
@@ -162,13 +204,14 @@
     if (im.tagName !== "IMG") return;
     var o = im.getAttribute("data-orig");
     if (o && im.src !== o) { im.setAttribute("data-orig", ""); im.src = o; }
+    else if (im.getAttribute("data-ic")) { im.src = im.getAttribute("data-ic"); im.removeAttribute("data-ic"); im.classList.add("is-ic"); }
     else if (im.src.indexOf("placeholder.svg") < 0) im.src = "/img/ui/placeholder.svg";
   }, true);
 
   // ------------------------------------------------------------------ listing filters (sidebar) on the listing JSON
   function cardHtml(d) {
     var off = d.w > d.p ? Math.round(100 * (d.w - d.p) / d.w) : 0;
-    return '<article class="card"><a class="card__a" href="' + d.u + '"><span class="card__img"><img src="' + esc(d.i || "/img/ui/placeholder.svg") + '" alt="" loading="lazy" referrerpolicy="no-referrer" width="320" height="320">'
+    return '<article class="card"><a class="card__a" href="' + d.u + '"><span class="card__img' + (/ans-media\.com/.test(d.i || "") ? " is-gray" + ($("[data-grid][data-fill]") ? " is-fill" : "") : "") + '"><img src="' + esc(d.i || "/img/ui/placeholder.svg") + '" alt="" loading="lazy" referrerpolicy="no-referrer" width="320" height="320">'
       + (off >= 5 ? '<span class="card__off">−' + off + NB + '%</span>' : "") + '</span><span class="card__b">' + (esc(d.b) || "&nbsp;") + '</span><span class="card__n">' + esc(d.n) + '</span></a>'
       + '<div class="card__foot"><span class="card__p"><b>' + kc(d.p) + '</b>' + (off >= 5 ? "<s>" + kc(d.w) + "</s>" : "") + '</span><span class="card__st">Skladem</span>'
       + '<button class="card__add" type="button" data-add="' + esc(JSON.stringify(d)) + '">' + ICON("bag", 18) + '<span>Do košíku</span></button></div></article>';
@@ -279,8 +322,11 @@
     if ($("[data-flow=order]")) { p.hidden = true; return; }
     var o = orders.filter(function (x) { return !x.opened && !x.cancelled && Date.now() - x.at < 864e5; })[0];
     if (!o) { p.hidden = true; return; }
-    var k = stageOf(o);
-    p.outerHTML = '<a class="orderpill" id="orderpill" href="/objednavka/#' + o.id + '"><span class="dot"></span><span>' + (k >= 5 ? "<b>Kurýr zvoní.</b> Otevři dveře" : "Zásilka " + o.id + ": <b>" + STAGES[k].n + "</b>") + "</span></a>";
+    var k = stageOf(o), key = o.id + ":" + k, gone = "";
+    try { gone = sessionStorage.getItem("knc:pillx") || ""; } catch (x) {}
+    if (gone === key) { p.hidden = true; return; }      // hidden until the next stage
+    p.outerHTML = '<div class="orderpill" id="orderpill"><a href="/objednavka/#' + o.id + '"><span class="dot"></span><span>' + (k >= 5 ? "<b>Kurýr zvoní.</b> Otevři dveře" : "Zásilka " + o.id + ": <b>" + STAGES[k].n + "</b>") + "</span></a>"
+      + '<button class="orderpill__x" type="button" data-pill-x="' + key + '" aria-label="Skrýt">' + ICON("x", 16) + "</button></div>";
   }
   setInterval(function () { if (document.visibilityState === "visible") orderPill(); }, 15000);
 
@@ -394,7 +440,7 @@
       var k = stageOf(o), total = STAGES[STAGES.length - 1].t, el2 = Math.min(total, (Date.now() - o.at) / 1000 + (o.skip || 0));
       if (o.opened) { receipt(el, o); clearInterval(timer); return; }
       var st = STAGES[Math.min(k, STAGES.length - 1)], note = st.notes[hash(o.id + k) % st.notes.length];
-      var pos = 6 + 88 * Math.min(1, Math.max(0, (el2 - 180) / (total - 180)));
+      var pos = 6 + 76 * Math.min(1, Math.max(0, (el2 - 180) / (total - 180)));
       var tl = STAGES.map(function (s, i) {
         var at = new Date(o.at + (s.t - (o.skip || 0)) * 1000);
         return '<li class="' + (i < k ? "done" : i === k ? "now" : "") + '"><span>' + s.n + '</span><small>' + (i <= k ? at.toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" }) : "") + "</small></li>";
@@ -453,7 +499,7 @@
       + items + '<hr><p class="r big"><span>CELKEM</span><span>' + kc(o.total) + '</span></p><p class="r"><span>Sleva za rozum</span><span>−' + kc(o.total) + '</span></p>'
       + '<p class="r big"><span>ZAPLACENO</span><span>0,00' + NB + 'Kč</span></p><hr><p class="saved">NEUTRACENO<b>' + kc(o.total) + "</b></p>"
       + '<p class="c">Doručil: ' + esc(o.courier) + '. Uvnitř: nic, přesně podle objednávky.</p></div>'
-      + "<h2>Za tyhle peníze by sis mohl dát</h2>" + equivHtml(o.total)
+      + "<h2>Za tyhle peníze by šlo mít</h2>" + equivHtml(o.total)
       + '<div class="piggy"><img src="/img/ui/piggy.webp" alt="" width="96" height="96"><div><span class="muted">Celkem jsi na KoupímNic neutratil</span><b>' + kc(savedTotal()) + "</b>"
       + '<button class="btn btn--sm btn--ghost" type="button" id="share">' + ICON("share", 16) + "Pochlubit se</button></div></div>"
       + "<h2>Pořád to chceš?</h2><p>Dej tomu tři dny v karanténě. Když tě to pak pořád bude lákat, koupíš to s čistým svědomím. Odkaz „Fakt to chci“ vede do obchodu a je reklamní.</p>"
@@ -516,7 +562,10 @@
       var rows = r.p.slice(0, 120).map(function (p) { return cardHtml({ id: p[0], n: p[1], b: p[2], p: p[3], w: 0, i: p[4], s: "", g: "", u: "/produkt/" + p[0] + "/" }); });
       el.innerHTML = '<p class="lead">„' + esc(q) + "“: " + (r.p.length ? r.p.length + (r.p.length >= 120 ? "+" : "") + " " + plural(r.p.length, "produkt", "produkty", "produktů") : "nic") + "</p>"
         + (cats ? '<nav class="chips">' + cats + "</nav>" : "") + (rows.length ? '<div class="grid" style="margin-top:18px">' + rows.join("") + "</div>" : "<p>Nic jsme nenašli. Zkus jiné slovo, třeba „iPhone“ nebo „LEGO“.</p>");
-      $$(".card__add", el).forEach(function (b) { b.remove(); });     // search rows carry no shop link: open the product instead
+      $$(".card__add", el).forEach(function (b) {     // search rows carry no shop: the button opens the product instead
+        var a = b.closest(".card").querySelector(".card__a");
+        b.outerHTML = '<a class="card__add" href="' + a.getAttribute("href") + '"><span>Zobrazit</span></a>';
+      });
     });
   }
 

@@ -367,7 +367,8 @@ def write_search(out, S, products, brand_pages, brand_name):
     sug = [[X.CATS[k][0], f"/{k}/", "k"] for k in X.CATS if k in S.cat_ok]
     sug += [[X.DEPTS[d][0], f"/{d}/", "o"] for d in X.DEPTS if d in S.dept_ok]
     sug += [[brand_name[b], f"/znacky/{b}/", "z"] for b, ps in sorted(brand_pages.items(), key=lambda x: -len(x[1]))]
-    sug += [[n, f"/{c}/{sl}/", "p"] for (c, sl), n in S.subs.items()]
+    bf = {X.fold(v) for v in brand_name.values()}      # a subcategory called "Nike" reads "Tenisky Nike" next to the brand "Nike"
+    sug += [[f"{X.CATS[c][0]} {n}" if X.fold(n) in bf else n, f"/{c}/{sl}/", "p"] for (c, sl), n in S.subs.items()]
     sug += [[f"{X.CATS[c][0]} {b}", f"/{c}/{bs}/", "p"] for (c, bs), b in S.brand_subs.items()]
     out.write("data/sug.json", json.dumps(sug, ensure_ascii=False, separators=(",", ":")))
     buckets = defaultdict(list)
@@ -404,17 +405,24 @@ def band(title, lead, icon=None, extra=""):
     return f'<section class="band"><div class="wrap band__in">{ic}<div class="band__txt"><h1>{title}</h1><p class="lead">{lead}</p>{extra}</div></div></section>'
 
 
-def img_tiles(S, rows):
-    """Subcategory / category tiles with the photo of their best product: rows = (href, name, count, product)."""
+def full_rows(rows, per=7, most=14):
+    """Photo tiles fill whole rows of 7 on desktop: 1-7 stay, more are cut to 7 or 14 (the rest is in the sidebar)."""
+    return rows if len(rows) <= per else rows[:min(most, len(rows) // per * per)]
+
+
+def img_tiles(S, rows, cls=""):
+    """Subcategory / category tiles with the photo of their best product: rows = (href, name, count, product).
+    Square photo boxes like the product cards; a dead photo falls back to the category icon (app.js, data-ic)."""
     if not rows:
         return ""
-    return '<div class="ptiles">' + "".join(
-        f'<a class="ptile" href="{h}"><span class="ptile__img"><img src="{E(R.img_url(p["img"], "card"))}" alt="" loading="lazy" referrerpolicy="no-referrer" width="120" height="120" data-orig="{E(p["img"])}"></span>'
+    return f'<div class="ptiles{" " + cls if cls else ""}">' + "".join(
+        f'<a class="ptile" href="{h}"><span class="ptile__img{R.photo_bg(p["img"], p["cat"])}"><img src="{E(R.img_url(p["img"], "card"))}" alt="" loading="lazy" referrerpolicy="no-referrer" width="160" height="160" data-orig="{E(p["img"])}" data-ic="/img/ic/{X.CATS[p["cat"]][3]}.webp"></span>'
         f'<span class="ptile__t"><b>{E(n)}</b><small>{nb(c)} {plural(c, "produkt", "produkty", "produktů")}</small></span></a>' for h, n, c, p in rows) + "</div>"
 
 
 def listing(S, items, jsn, page, pages, path, side_links=None):
     """Sidebar filters (wired to the listing JSON by app.js) + sort tabs + server-rendered page of products + pager."""
+    fill = " data-fill" if items and X.CATS[items[0]["cat"]][1] in R.FILL_DEPTS else ""     # Answear shoe/bag shots fill the box
     chunk = items[(page - 1) * R.PER_PAGE: page * R.PER_PAGE]
     top = items[:JSON_ITEMS]
     brands = [(b, n) for b, n in Counter(p["brand"] for p in top if p["brand"]).most_common(30) if n >= 2]
@@ -439,7 +447,7 @@ def listing(S, items, jsn, page, pages, path, side_links=None):
     head = (f'<div class="lhead"><p class="lhead__n"><b data-n>{nb(n)}</b> {plural(n, "produkt", "produkty", "produktů")}</p>{tabs}'
             f'<button type="button" class="btn btn--sm btn--ghost lhead__f" data-open-filters>{R.icon("sliders", 18)}Filtry</button></div>')
     return (f'<div class="shop">{side}<div class="shop__main">{head}<div class="chips-on" data-active hidden></div>'
-            f'<div data-grid>{S.grid(chunk, first_eager=4 if page == 1 else 0)}</div>{R.pager_html(path, page, pages)}</div></div>')
+            f'<div data-grid{fill}>{S.grid(chunk, first_eager=4 if page == 1 else 0)}</div>{R.pager_html(path, page, pages)}</div></div>')
 
 
 def dept_page(S, d, items, jsn, page, pages):
@@ -470,7 +478,7 @@ def cat_page(S, k, items, jsn, page, pages):
     top = [b for b, _ in Counter(p["brand"] for p in items[:400] if p["brand"]).most_common(3)]
     lead = f"{nb(n)} {plural(n, 'produkt', 'produkty', 'produktů')} od {kc(lo)} do {kc(hi)}" + (f", nejvíc {', '.join(E(b) for b in top)}" if top else "") + "."
     rows, brows = cat_subs(S, k)
-    tiles = img_tiles(S, rows[:18]) if page == 1 else ""
+    tiles = img_tiles(S, full_rows(rows)) if page == 1 else ""
     bchips = ('<div class="bchips"><span>Značky:</span>' + "".join(f'<a href="{h}">{E(t)}</a>' for h, t, _, _ in brows[:16]) + "</div>") if brows and page == 1 else ""
     side = [(h, t, c) for h, t, c, _ in rows] + [(h, t, c) for h, t, c, _ in brows]
     body = band(E(h1), lead, ic) + f'<div class="wrap">{tiles}{bchips}{listing(S, items, jsn, page, pages, f"/{k}/", side)}</div>'
@@ -567,7 +575,7 @@ def product_page(S, p):
                      f'<img src="{E(R.img_url(u, "card"))}" alt="" loading="lazy" referrerpolicy="no-referrer" width="72" height="72" data-orig="{E(u)}"></button>'
                      for i, u in enumerate(imgs)) if len(imgs) > 1 else ""
     off = f"<span class=card__off>−{disc}&nbsp;%</span>" if disc >= 5 else ""
-    gal = (f'<div class="gal"><div class="gal__main"><img id="gmain" src="{E(main)}" alt="{E(p["name"])}" referrerpolicy="no-referrer" width="720" height="720" '
+    gal = (f'<div class="gal"><div class="gal__main{R.photo_bg(p["img"])}"><img id="gmain" src="{E(main)}" alt="{E(p["name"])}" referrerpolicy="no-referrer" width="720" height="720" '
            f'fetchpriority="high" data-orig="{E(imgs[0] if imgs else "")}">{off}</div><div class="thumbs">{thumbs}</div></div>')
     data = E(json.dumps(S.item_data(p), ensure_ascii=False, separators=(",", ":")))
     sizes = ""
@@ -599,7 +607,7 @@ def product_page(S, p):
     elif p["brand"]:
         meta.append(f"<span>{E(p['brand'])}</span>")
     meta.append(f'<a href="/{k}/">{E(X.CATS[k][0])}</a>')
-    if p.get("sub") and (k, p["sub"]) in S.subs:
+    if p.get("sub") and (k, p["sub"]) in S.subs and X.fold(S.subs[(k, p["sub"])]) != X.fold(p["brand"]):
         meta.append(f'<a href="/{k}/{p["sub"]}/">{E(S.subs[(k, p["sub"])])}</a>')
     spec = [("Značka", E(p["brand"]) or "neuvedena"), ("Kategorie", f'<a href="/{k}/">{E(X.CATS[k][0])}</a>'), ("Obchod", E(shop["name"]))]
     if p["color"]:
@@ -658,7 +666,8 @@ def flow_page(S, path, title, kind):
         "savings": '<h1>Moje úspory</h1><div id="flow" data-flow="savings"><p class="muted">Počítám, co jsi neutratil…</p></div>',
         "search": '<h1>Hledat</h1><div id="flow" data-flow="search"><p class="muted">Hledám…</p></div>',
     }
-    return S.layout(path, title + SUFFIX, "Nákup nanečisto na KoupímNic.", f'<div class="wrap flow">{shells[kind]}</div>', noindex=True, cls="is-" + kind)
+    wide = " flow--wide" if kind == "search" else ""      # results use the full width like every listing
+    return S.layout(path, title + SUFFIX, "Nákup nanečisto na KoupímNic.", f'<div class="wrap flow{wide}">{shells[kind]}</div>', noindex=True, cls="is-" + kind)
 
 
 def home_page(S, products, by_cat, by_dept, subs):
@@ -676,13 +685,15 @@ def home_page(S, products, by_cat, by_dept, subs):
     depts = [(f"/{d}/", X.DEPTS[d][0], len(by_dept[d]), X.DEPTS[d][2]) for d in X.DEPTS if d in S.dept_ok]
     pop = [("mobilni-telefony", "iphone"), ("notebooky", "macbook-air"), ("herni-konzole", "playstation-5"), ("sluchatka", "airpods"), ("lego", "technic"),
            ("tenisky", "nike"), ("chytre-hodinky", "apple-watch"), ("televize", "oled-televize"), ("vysavace", "roboticke-vysavace"), ("damske-parfemy", "parfemovane-vody"),
-           ("kavovary", "automaticke-kavovary"), ("tenisky", "new-balance"), ("tablety", "ipad"), ("drony", "dji-mini"), ("zubni-pece", ""), ("kabelky", "crossbody")]
+           ("kavovary", "automaticke-kavovary"), ("tenisky", "new-balance"), ("tablety", "ipad"), ("drony", "dji-mini"),
+           ("kabelky", "crossbody"), ("damske-parfemy", ""), ("lego", ""), ("notebooky", "herni-notebooky"), ("televize", ""), ("sluchatka", "")]
     prow = []
     for c, sl in pop:
         ps = subs.get((c, sl)) if sl else by_cat.get(c)
-        if ps:
+        if len(prow) < 14 and ps and (c, sl) not in {(r[4], r[5]) for r in prow}:
             best = sorted(ps, key=pop_key)[0]
-            prow.append((f"/{c}/{sl}/" if sl else f"/{c}/", S.subs[(c, sl)] if sl else X.CATS[c][0], len(ps), best))
+            prow.append((f"/{c}/{sl}/" if sl else f"/{c}/", S.subs[(c, sl)] if sl else X.CATS[c][0], len(ps), best, c, sl))
+    prow = [r[:4] for r in prow]
     rows = ""
     for d in X.DEPTS:
         if d not in S.dept_ok:
@@ -702,7 +713,7 @@ def home_page(S, products, by_cat, by_dept, subs):
             '<p class="hero__saved" data-saved-hero hidden></p></div>'
             '<div class="hero__art"><img src="/img/ui/hero.webp" alt="" width="560" height="480" fetchpriority="high"></div></div></section>')
     body = (hero + f'<div class="wrap"><section class="sec"><h2>Oddělení</h2>{S.tiles(depts)}</section>'
-            f'<section class="sec"><div class="sec__h"><h2>Oblíbené kategorie</h2><a href="/kategorie/">Všechny kategorie</a></div>{img_tiles(S, prow)}</section>'
+            f'<section class="sec"><div class="sec__h"><h2>Oblíbené kategorie</h2><a href="/kategorie/">Všechny kategorie</a></div>{img_tiles(S, prow, "ptiles--scroll")}</section>'
             f'<section class="sec" id="vyber"><div class="sec__h"><h2>Doporučujeme</h2><a href="/slevy/">Slevy</a></div>{S.grid(picks[:12], first_eager=4)}</section>{rows}'
             '<section class="honest"><h2>Jak KoupímNic funguje</h2><p>Vybíráš ze skutečných produktů za skutečné ceny, vkládáš do košíku a projdeš pokladnou jako v každém e-shopu. '
             'Co se stane na konci, uvidíš sám. <a class="lnk" href="/jak-to-funguje/">Víc o KoupímNic</a></p></section></div>')

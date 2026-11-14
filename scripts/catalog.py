@@ -99,6 +99,7 @@ def load_offers(shops):
                 dropped[s["id"] + ":cheap"] += 1
                 continue
             desc = X.clean(re.sub(r"<[^>]+>", " ", r.get("d") or ""))
+            desc = re.sub(r"(?<=[a-zá-ž0-9)][.:!?])(?=[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ])", " ", desc)     # "vzhled.Výhody:Prémiový" -> spaces
             out.append({
                 "shop": s["id"], "oid": str(r["id"]), "g": str(r.get("g") or ""), "title": X.clean(r["t"]), "desc": desc[:1200],
                 "brand": X.brand_of(r) or s.get("brand", ""), "ean": norm_ean(r.get("ean")), "img": https(r.get("img")),
