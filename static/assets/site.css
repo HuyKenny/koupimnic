@@ -115,6 +115,7 @@ button,input,select{font:inherit;color:inherit}
 /* band (listing head) */
 .band{background:#fff;border-bottom:1px solid var(--line);padding:22px 0 24px;margin-bottom:8px}
 .band__in{display:flex;gap:18px;align-items:flex-start}
+.band__txt{min-width:0;flex:1}
 .band__ic{width:64px;height:64px;flex:none}
 .band h1{margin-bottom:.3em}.band .lead{margin:0}
 @media(max-width:600px){.band__ic{width:48px;height:48px}}
