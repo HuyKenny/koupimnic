@@ -125,6 +125,7 @@ def cj_offers(shop):
               f'condition price{{ amount currency }} salePrice{{ amount }} linkCode(pid:"{pid}"){{ clickUrl }}')
     got = {}
     cap, start = 0, 0
+    total_cap = int(shop.get("max") or 0)      # giant catalogues (bookshops: 400k titles) - a slice from the middle price bands is plenty
 
     def count(lo, hi):
         x = cj_gql('{ shoppingProducts(%s, lowPrice:%s, highPrice:%s, limit:1){ totalCount } }' % (base, lo, hi))
@@ -135,7 +136,7 @@ def cj_offers(shop):
         """Count first (cheap), fetch only bands that fit one page of 1 000 rows. CJ fails for offset >= 10 000 and its
         paging order is unstable, so bands of <= 1 000 rows are the only safe way. Big feeds (Bambule 40k+) would
         otherwise download every oversized band once just to learn it has to be split."""
-        if (LIMIT and len(got) - start >= LIMIT) or (cap and len(got) - start >= cap):
+        if (LIMIT and len(got) - start >= LIMIT) or (cap and len(got) - start >= cap) or (total_cap and len(got) >= total_cap):
             return
         n = count(lo, hi) if n is None else n
         if n == 0:
@@ -163,9 +164,12 @@ def cj_offers(shop):
         base = base0 + (", keywords:[" + json.dumps(kw, ensure_ascii=False) + "]" if kw else "")
         start = len(got)
         bands = list(zip(edges, edges[1:]))
+        if shop.get("lo") or shop.get("hi"):         # bookshops: only the usual price range (no 3 000 Kč academic hardbacks)
+            lo_, hi_ = float(shop.get("lo") or 0), float(shop.get("hi") or 2000000)
+            bands = [(max(a_, lo_), min(b_, hi_)) for a_, b_ in bands if b_ > lo_ and a_ < hi_]
         if kw:
             bands = bands[::-1]
-        elif LIMIT:      # a local sample: a bit of every price band, not only the cheapest accessories
+        elif LIMIT or total_cap:      # a sample or a capped shop: start in the middle bands, not with the cheapest accessories
             bands = bands[len(bands) // 2:] + bands[:len(bands) // 2]
         for lo, hi in bands:
             grab(lo if lo == 0 else lo + 0.01, hi)
@@ -383,6 +387,8 @@ def run(shop):
             for rec in SOURCES[shop["network"]](shop):
                 if rec["id"] in seen:
                     continue
+                if (shop.get("max") and n >= int(shop["max"])) or (LIMIT and shop["network"] != "cj" and n >= LIMIT * 5):
+                    break
                 seen.add(rec["id"])
                 out.write(json.dumps(rec, ensure_ascii=False) + "\n")
                 n += 1

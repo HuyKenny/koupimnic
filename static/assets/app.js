@@ -1,11 +1,13 @@
-/* KoupímNic — the whole shop runs here: cart, checkout, the "delivery", the receipt, savings and the wish quarantine.
-   Everything stays in localStorage; nothing is sent anywhere and nothing is paid. No inline handlers (strict CSP). */
+/* KoupímNic — the whole shop runs here: menu, filters, cart, checkout, the "delivery", the receipt, savings, wish quarantine.
+   Prices are real everywhere; only after "Zaplatit" the visitor learns that nothing was charged (Kenny 14. 11. 2026).
+   Cart/orders live in localStorage; checkout address fields are NEVER stored or sent. No inline handlers (strict CSP). */
 (function () {
   "use strict";
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
   var esc = function (s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); };
-  var kc = function (n) { return Math.round(n || 0).toLocaleString("cs-CZ").replace(/\s/g, " ") + " Kč"; };
+  var NB = " ";
+  var kc = function (n) { return Math.round(n || 0).toLocaleString("cs-CZ").replace(/\s/g, NB) + NB + "Kč"; };
   var plural = function (n, a, b, c) { return n === 1 ? a : (n > 1 && n < 5 ? b : c); };
   var ICON = function (n, s) { s = s || 20; return '<svg class="i" width="' + s + '" height="' + s + '" aria-hidden="true"><use href="/img/ui/icons.svg#' + n + '"/></svg>'; };
 
@@ -25,7 +27,6 @@
   function setCart(c) { cart = c; save("cart:v1", c); refreshHeader(); }
   function setOrders(o) { orders = o.slice(0, 40); save("orders:v1", orders); refreshHeader(); }
   function setWants(w) { wants = w.slice(0, 60); save("wants:v1", wants); }
-
   var cartCount = function () { return cart.reduce(function (s, x) { return s + x.q; }, 0); };
   var cartSum = function (c) { return (c || cart).reduce(function (s, x) { return s + x.p * x.q; }, 0); };
   var savedTotal = function () { return orders.reduce(function (s, o) { return s + (o.cancelled ? 0 : o.total); }, 0); };
@@ -34,9 +35,9 @@
   function refreshHeader() {
     var n = cartCount();
     $$("[data-count]").forEach(function (b) { b.hidden = !n; if (b.textContent !== String(n)) { b.textContent = n; b.classList.remove("pop"); void b.offsetWidth; b.classList.add("pop"); } });
+    $$("[data-sum]").forEach(function (s) { s.textContent = n ? kc(cartSum()) : "Košík"; });
     $$("[data-saved]").forEach(function (s) { s.textContent = kc(savedTotal()); });
-    var hero = $("[data-saved-hero]");
-    if (hero && savedTotal() > 0) { hero.hidden = false; hero.textContent = "Zatím jsi tu neutratil " + kc(savedTotal()); }
+    $$("[data-saved-pill]").forEach(function (s) { s.hidden = !savedTotal(); });
     orderPill();
   }
   var toastT;
@@ -47,35 +48,42 @@
   }
 
   // ------------------------------------------------------------------ cart actions
-  function addItem(d, size, quiet) {
-    var key = d.id + "|" + (size || "");
+  function addItem(d, size, quiet, qty) {
+    var key = d.id + "|" + (size || ""), add = Math.max(1, Math.min(9, qty || 1));
     var c = cart.slice(), found = false;
-    c.forEach(function (x) { if (x.k === key) { x.q = Math.min(9, x.q + 1); found = true; } });
-    if (!found) c.unshift({ k: key, id: d.id, n: d.n, b: d.b, p: d.p, w: d.w, i: d.i, s: d.s, g: d.g, u: d.u, c: d.c, size: size || "", q: 1 });
+    c.forEach(function (x) { if (x.k === key) { x.q = Math.min(9, x.q + add); found = true; } });
+    if (!found) c.unshift({ k: key, id: d.id, n: d.n, b: d.b, p: d.p, w: d.w, i: d.i, s: d.s, g: d.g, u: d.u, c: d.c, size: size || "", q: add });
     setCart(c.slice(0, 40));
-    track("add_to_cart", { value: d.p });
-    if (!quiet) toast(ICON("check") + "<span>V košíku. Zatím to stojí 0&nbsp;Kč.</span><a href=\"/kosik/\">Košík</a>");
+    track("add_to_cart", { value: d.p * add, currency: "CZK" });
+    if (!quiet) toast(ICON("check") + "<span>Přidáno do košíku</span><a href=\"/kosik/\">Zobrazit košík</a>");
   }
   document.addEventListener("click", function (e) {
     var a = e.target.closest("[data-add]");
     if (a) {
       e.preventDefault();
-      try { addItem(JSON.parse(a.getAttribute("data-add"))); a.classList.add("ok"); a.innerHTML = ICON("check"); } catch (err) {}
+      try { addItem(JSON.parse(a.getAttribute("data-add"))); a.classList.add("ok"); a.innerHTML = ICON("check", 18) + "<span>V košíku</span>"; } catch (err) {}
       return;
     }
     var b = e.target.closest("[data-buy]");
     if (b) {
       var box = b.closest("[data-item]"); if (!box) return;
-      var d = JSON.parse(box.getAttribute("data-item")), sz = $("input[name=size]:checked", box);
-      addItem(d, sz ? sz.value : "", b.getAttribute("data-buy") === "now");
-      if (b.getAttribute("data-buy") === "now") location.href = "/pokladna/"; else openCart();
+      var d = JSON.parse(box.getAttribute("data-item")), sz = $(".buy input[name=size]:checked"), qi2 = $(".buy [data-qty] input");
+      var now = b.getAttribute("data-buy") === "now";
+      addItem(d, sz ? sz.value : "", now, qi2 ? +qi2.value : 1);
+      if (now) location.href = "/pokladna/"; else openCart();
       return;
     }
+    var qd = e.target.closest("[data-qd]");
+    if (qd) { var inp = $("input", qd.closest("[data-qty]")); inp.value = Math.max(1, Math.min(9, (+inp.value || 1) + (+qd.getAttribute("data-qd")))); return; }
     if (e.target.closest("[data-open-cart]")) { openCart(); return; }
     if (e.target.closest("#cart [data-close]")) { closeCart(); return; }
+    if (e.target.closest("[data-mega]")) { toggleMega(); return; }
+    if ($("#mega") && !$("#mega").hidden && !e.target.closest("#mega")) toggleMega(false);
+    if (e.target.closest("[data-open-filters]")) { document.body.classList.add("filters-open"); return; }
+    if (e.target.closest("[data-close-filters]")) { document.body.classList.remove("filters-open"); return; }
     var q = e.target.closest("[data-q]");
     if (q) { changeQty(q.getAttribute("data-k"), +q.getAttribute("data-q")); return; }
-    var t = e.target.closest("[data-thumb]") || e.target.closest(".thumbs button");
+    var t = e.target.closest(".thumbs button");
     if (t && $("#gmain")) { $("#gmain").src = t.getAttribute("data-src"); $$(".thumbs button").forEach(function (x) { x.classList.toggle("on", x === t); }); return; }
     var m = e.target.closest("[data-more]");
     if (m) { var el = document.getElementById(m.getAttribute("data-more")); if (el) el.classList.remove("clamp"); m.remove(); return; }
@@ -84,37 +92,69 @@
   });
   function changeQty(k, dq) {
     var c = cart.map(function (x) { return x.k === k ? Object.assign({}, x, { q: dq === 0 ? 0 : Math.max(0, Math.min(9, x.q + dq)) }) : x; }).filter(function (x) { return x.q > 0; });
-    setCart(c); renderDrawer(); if ($("[data-flow=cart]")) flowCart($("#flow")); if ($("[data-flow=checkout]")) flowCheckout($("#flow"));
+    setCart(c); renderDrawer(); if ($("[data-flow=cart]")) flowCart($("#flow")); if ($("[data-flow=checkout]")) coRender();
+  }
+
+  // ------------------------------------------------------------------ mega menu (data/menu.json, loaded on first open)
+  var menu = null, menuDept = 0;
+  function toggleMega(force) {
+    var m = $("#mega"), btn = $("[data-mega]"); if (!m) return;
+    var open = force === undefined ? m.hidden : force;
+    m.hidden = !open; if (btn) btn.setAttribute("aria-expanded", open ? "true" : "false");
+    document.body.classList.toggle("mega-open", open);
+    if (open && !menu) fetch("/data/menu.json").then(function (r) { return r.json(); }).then(function (j) { menu = j; drawMega(); }).catch(function () {});
+    else if (open) drawMega();
+  }
+  function drawMega() {
+    var box = $("#mega-in"); if (!box || !menu) return;
+    var d = menu[menuDept] || menu[0];
+    box.innerHTML = '<ul class="mega__depts">' + menu.map(function (x, i) {
+      return '<li><button type="button" data-dept="' + i + '"' + (i === menuDept ? ' class="on"' : "") + '><img src="/img/ic/' + x[2] + '.webp" alt="" width="28" height="28">' + esc(x[1]) + ICON("chev", 16) + "</button></li>";
+    }).join("") + '</ul><div class="mega__cats"><a class="mega__all" href="/' + d[0] + '/">Vše z oddělení ' + esc(d[1]) + ICON("arrow", 16) + "</a><div class=\"mega__grid\">" + d[3].map(function (c) {
+      return '<div><a class="mega__cat" href="/' + c[0] + '/"><img src="/img/ic/' + c[3] + '.webp" alt="" width="36" height="36" loading="lazy">' + esc(c[1]) + "</a><ul>"
+        + c[4].slice(0, 7).map(function (s) { return '<li><a href="/' + c[0] + "/" + s[0] + '/">' + esc(s[1]) + "</a></li>"; }).join("") + "</ul></div>";
+    }).join("") + "</div></div>";
+    $$("[data-dept]", box).forEach(function (b) {
+      var pick = function () { menuDept = +b.getAttribute("data-dept"); drawMega(); };
+      b.addEventListener("click", pick);
+      if (window.matchMedia("(hover: hover)").matches) b.addEventListener("mouseenter", pick);
+    });
   }
 
   // ------------------------------------------------------------------ drawer
   function linesHtml(c, editable) {
     return '<ul class="lines">' + c.map(function (x) {
       return '<li class="line"><img src="' + esc(x.i) + '" alt="" loading="lazy" referrerpolicy="no-referrer"><div><a class="line__n" href="' + esc(x.u) + '">' + esc(x.n) + '</a>'
-        + '<div class="line__m">' + esc(x.s) + (x.size ? " · vel. " + esc(x.size) : "") + '</div>'
+        + '<div class="line__m">Skladem' + (x.size ? " · velikost " + esc(x.size) : "") + '</div>'
         + (editable ? '<div class="qty"><button type="button" data-q="-1" data-k="' + esc(x.k) + '" aria-label="Méně">' + ICON("minus", 14) + '</button><span>' + x.q + '</span>'
-          + '<button type="button" data-q="1" data-k="' + esc(x.k) + '" aria-label="Více">' + ICON("plus", 14) + '</button> <button class="rm" type="button" data-q="0" data-k="' + esc(x.k) + '">Odebrat</button></div>' : (x.q > 1 ? '<div class="line__m">' + x.q + ' ks</div>' : ""))
+          + '<button type="button" data-q="1" data-k="' + esc(x.k) + '" aria-label="Více">' + ICON("plus", 14) + '</button><button class="rm" type="button" data-q="0" data-k="' + esc(x.k) + '">Odebrat</button></div>'
+          : (x.q > 1 ? '<div class="line__m">' + x.q + ' ks</div>' : ""))
         + '</div><div class="line__p">' + kc(x.p * x.q) + '</div></li>';
     }).join("") + "</ul>";
   }
-  function totalsHtml(sum, extra) {
-    return '<div class="totals"><p><span>Mezisoučet</span><span>' + kc(sum) + '</span></p>' + (extra || "")
-      + '<p class="disc"><span>Sleva „Nic nekupuju“</span><span>−' + kc(sum) + '</span></p><p class="pay"><span>K úhradě</span><b>0 Kč</b></p></div>';
+  function totalsHtml(sum) {
+    return '<div class="totals"><p><span>Mezisoučet</span><span>' + kc(sum) + '</span></p><p><span>Doprava</span><span class="free">zdarma</span></p>'
+      + '<p class="pay"><span>Celkem k úhradě</span><b>' + kc(sum) + '</b></p><p class="vat">včetně DPH</p></div>';
   }
   function emptyHtml() {
-    return '<div class="empty"><img src="/img/ui/box-empty.webp" alt="" width="150" height="150"><p><b>Košík je prázdný.</b><br>Na rozdíl od krabice, která ti přijde, se to dá změnit.</p>'
-      + '<p><a class="btn" href="/">Jdu vybírat</a></p></div>';
+    return '<div class="empty"><img src="/img/ui/box-empty.webp" alt="" width="150" height="150"><p><b>Košík je prázdný.</b><br>Vyber si z tisíců produktů.</p>'
+      + '<p><a class="btn" href="/">Nakupovat</a></p></div>';
   }
   function renderDrawer() {
     var b = $("#cart-body"); if (!b) return;
     if (!cart.length) { b.innerHTML = emptyHtml(); return; }
-    b.innerHTML = linesHtml(cart, true) + totalsHtml(cartSum()) + '<a class="btn btn--lg" style="width:100%" href="/pokladna/">K pokladně, platí se 0 Kč</a>'
-      + '<p class="muted" style="font-size:13px;text-align:center;margin-top:10px">Ceny jsou skutečné ceny obchodů. Ty nezaplatíš nic.</p>';
+    b.innerHTML = linesHtml(cart, true) + totalsHtml(cartSum()) + '<a class="btn btn--lg btn--full" href="/pokladna/">Pokračovat k pokladně</a>'
+      + '<a class="btn btn--ghost btn--full" href="/kosik/">Zobrazit košík</a>';
   }
   var lastFocus;
   function openCart() { var d = $("#cart"); if (!d) return; lastFocus = document.activeElement; renderDrawer(); d.hidden = false; document.body.style.overflow = "hidden"; var x = $(".x", d); if (x) x.focus(); }
   function closeCart() { var d = $("#cart"); if (!d) return; d.hidden = true; document.body.style.overflow = ""; if (lastFocus) lastFocus.focus(); }
-  document.addEventListener("keydown", function (e) { if (e.key === "Escape" && $("#cart") && !$("#cart").hidden) closeCart(); });
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Escape") return;
+    if ($("#cart") && !$("#cart").hidden) closeCart();
+    if ($("#mega") && !$("#mega").hidden) toggleMega(false);
+    document.body.classList.remove("filters-open");
+  });
 
   // ------------------------------------------------------------------ images: wsrv.nl fallback to the shop's original
   document.addEventListener("error", function (e) {
@@ -125,65 +165,88 @@
     else if (im.src.indexOf("placeholder.svg") < 0) im.src = "/img/ui/placeholder.svg";
   }, true);
 
-  // ------------------------------------------------------------------ listing: sort / filter from the listing JSON
-  function cardHtml(r, brands) {
-    var d = { id: r[0], n: r[1], b: r[2] >= 0 ? brands[r[2]] : "", p: r[3], w: r[4], i: r[5], s: r[6], g: r[7], u: "/produkt/" + r[0] + "/" };
+  // ------------------------------------------------------------------ listing filters (sidebar) on the listing JSON
+  function cardHtml(d) {
     var off = d.w > d.p ? Math.round(100 * (d.w - d.p) / d.w) : 0;
     return '<article class="card"><a class="card__a" href="' + d.u + '"><span class="card__img"><img src="' + esc(d.i || "/img/ui/placeholder.svg") + '" alt="" loading="lazy" referrerpolicy="no-referrer" width="320" height="320">'
-      + (off >= 5 ? '<span class="card__off">−' + off + ' %</span>' : "") + '</span><span class="card__b">' + (esc(d.b) || "&nbsp;") + '</span><span class="card__n">' + esc(d.n) + '</span>'
-      + '<span class="card__p"><b>' + kc(d.p) + '</b>' + (off >= 5 ? "<s>" + kc(d.w) + "</s>" : "") + '</span></a>'
-      + '<button class="card__add" type="button" data-add="' + esc(JSON.stringify(d)) + '" aria-label="Přidat do košíku">' + ICON("plus") + '</button></article>';
+      + (off >= 5 ? '<span class="card__off">−' + off + NB + '%</span>' : "") + '</span><span class="card__b">' + (esc(d.b) || "&nbsp;") + '</span><span class="card__n">' + esc(d.n) + '</span></a>'
+      + '<div class="card__foot"><span class="card__p"><b>' + kc(d.p) + '</b>' + (off >= 5 ? "<s>" + kc(d.w) + "</s>" : "") + '</span><span class="card__st">Skladem</span>'
+      + '<button class="card__add" type="button" data-add="' + esc(JSON.stringify(d)) + '">' + ICON("bag", 18) + '<span>Do košíku</span></button></div></article>';
   }
-  var tools = $(".tools[data-list]");
-  if (tools) {
-    var data = null, shown = 48, grid = $("[data-grid]"), pager = $(".pg");
+  var side = $("#filters");
+  if (side) {
+    var data = null, shown = 48, sort = "", grid = $("[data-grid]"), pager = $(".pg");
+    var rowData = function (r) { return { id: r[0], n: r[1], b: r[2] >= 0 ? data.b[r[2]] : "", p: r[3], w: r[4], i: r[5], s: data.o[r[6]], g: r[7], u: "/produkt/" + r[0] + "/" }; };
+    var state = function () {
+      var vals = function (f) { return $$('[data-f="' + f + '"] input:checked', side).map(function (x) { return x.value; }); };
+      return { brands: vals("brand"), shops: vals("shop"), min: +($('[data-f="min"]', side).value || 0), max: +($('[data-f="max"]', side).value || 0), sale: $('[data-f="sale"]', side).checked };
+    };
     var apply = function () {
-      var sort = ($("[data-sort]", tools) || {}).value || "", br = ($("[data-brand]", tools) || {}).value || "", pr = ($("[data-price]", tools) || {}).value || "";
-      if (!sort && !br && !pr) { location.reload(); return; }
-      var lo = 0, hi = 1e12;
-      if (pr) { var a = pr.split("-"); lo = +a[0] || 0; hi = a[1] ? +a[1] : 1e12; }
-      var bi = br ? data.b.indexOf(br) : -1;
-      var rows = data.i.filter(function (r) { return (!br || r[2] === bi) && r[3] >= lo && r[3] <= hi; });
+      var st = state(), any = st.brands.length || st.shops.length || st.min || st.max || st.sale || sort;
+      if (!any) { if (grid.getAttribute("data-orig")) { grid.innerHTML = grid.getAttribute("data-orig"); if (pager) pager.hidden = false; } setN(null); chips(st); return; }
+      if (!grid.getAttribute("data-orig")) grid.setAttribute("data-orig", grid.innerHTML);
+      var rows = data.i.filter(function (r) {
+        return (!st.brands.length || (r[2] >= 0 && st.brands.indexOf(data.b[r[2]]) >= 0)) && (!st.shops.length || st.shops.indexOf(data.o[r[6]]) >= 0)
+          && (!st.min || r[3] >= st.min) && (!st.max || r[3] <= st.max) && (!st.sale || r[4] > r[3] * 1.05);
+      });
       if (sort === "p") rows.sort(function (a, b) { return a[3] - b[3]; });
       if (sort === "-p") rows.sort(function (a, b) { return b[3] - a[3]; });
       if (sort === "d") rows.sort(function (a, b) { return (b[4] > b[3] ? (b[4] - b[3]) / b[4] : 0) - (a[4] > a[3] ? (a[4] - a[3]) / a[4] : 0); });
-      var html = rows.slice(0, shown).map(function (r) { return cardHtml(r, data.b); }).join("");
-      grid.innerHTML = rows.length ? '<div class="grid">' + html + "</div>" + (rows.length > shown ? '<div class="more-wrap"><button class="btn btn--ghost" type="button" data-showmore>Ukázat další</button></div>' : "")
-        : '<p class="empty">Nic takového tu není. Jako ve tvé krabici.</p>';
+      grid.innerHTML = rows.length ? '<div class="grid">' + rows.slice(0, shown).map(function (r) { return cardHtml(rowData(r)); }).join("") + "</div>"
+        + (rows.length > shown ? '<div class="more-wrap"><button class="btn btn--ghost" type="button" data-showmore>Načíst další (' + (rows.length - shown) + ")</button></div>" : "")
+        : '<div class="empty"><p><b>Tomu nic neodpovídá.</b><br>Zkus uvolnit filtry.</p></div>';
       if (pager) pager.hidden = true;
-      var n = $(".tools__n b", tools); if (n) n.textContent = rows.length.toLocaleString("cs-CZ");
+      setN(rows.length); chips(st);
     };
-    tools.addEventListener("change", function () {
-      shown = 48;
-      if (data) return apply();
-      fetch(tools.getAttribute("data-list")).then(function (r) { return r.json(); }).then(function (j) { data = j; apply(); }).catch(function () {});
+    var setN = function (n) { var el = $("[data-n]"); if (!el) return; if (!el.getAttribute("data-orig")) el.setAttribute("data-orig", el.textContent); el.textContent = n === null ? el.getAttribute("data-orig") : n.toLocaleString("cs-CZ"); };
+    var chips = function (st) {
+      var box = $("[data-active]"); if (!box) return;
+      var c = st.brands.concat(st.shops).map(function (v) { return '<button type="button" data-unf="' + esc(v) + '">' + esc(v) + ICON("x", 14) + "</button>"; });
+      if (st.min || st.max) c.push('<button type="button" data-unf="price">' + (st.min ? "od " + kc(st.min) + " " : "") + (st.max ? "do " + kc(st.max) : "") + ICON("x", 14) + "</button>");
+      if (st.sale) c.push('<button type="button" data-unf="sale">Ve slevě' + ICON("x", 14) + "</button>");
+      box.innerHTML = c.join("") + (c.length ? '<button type="button" class="chips-on__clear" data-unf="all">Zrušit filtry</button>' : "");
+      box.hidden = !c.length;
+    };
+    var run = function () { shown = 48; if (data) return apply(); fetch(side.getAttribute("data-list")).then(function (r) { return r.json(); }).then(function (j) { data = j; apply(); }).catch(function () {}); };
+    side.addEventListener("change", run);
+    var tm; side.addEventListener("input", function (e) { if (e.target.type === "number") { clearTimeout(tm); tm = setTimeout(run, 400); } });
+    $$("[data-sort]").forEach(function (b) { b.addEventListener("click", function () { sort = b.getAttribute("data-sort"); $$("[data-sort]").forEach(function (x) { x.classList.toggle("on", x === b); }); run(); }); });
+    document.addEventListener("click", function (e) {
+      if (e.target.closest("[data-showmore]")) { shown += 48; apply(); return; }
+      var u = e.target.closest("[data-unf]"); if (!u) return;
+      var v = u.getAttribute("data-unf");
+      if (v === "all") { $$("input[type=checkbox]", side).forEach(function (x) { x.checked = false; }); $$("input[type=number]", side).forEach(function (x) { x.value = ""; }); }
+      else if (v === "price") $$("input[type=number]", side).forEach(function (x) { x.value = ""; });
+      else if (v === "sale") $('[data-f="sale"]', side).checked = false;
+      else $$("input[type=checkbox]", side).forEach(function (x) { if (x.value === v) x.checked = false; });
+      run();
     });
-    document.addEventListener("click", function (e) { if (e.target.closest("[data-showmore]")) { shown += 48; apply(); } });
   }
 
   // ------------------------------------------------------------------ search (static index: data/sug.json + data/s/<2 letters>.json)
   var fold = function (s) { return (s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, ""); };
-  var sugCache = {}, sugAll = null;
+  var sugCache = {};
   function getJSON(u) { if (!sugCache[u]) sugCache[u] = fetch(u).then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; }); return sugCache[u]; }
   function searchRows(q) {
     var words = fold(q).match(/[a-z0-9]+/g) || [];
     if (!words.length || words[0].length < 2) return Promise.resolve({ c: [], p: [] });
     return Promise.all([getJSON("/data/sug.json"), getJSON("/data/s/" + words[0].slice(0, 2) + ".json")]).then(function (res) {
       var hit = function (t) { var f = fold(t); return words.every(function (w) { return f.indexOf(w) >= 0; }); };
-      return { c: res[0].filter(function (r) { return hit(r[0]); }).slice(0, 4), p: res[1].filter(function (r) { return hit(r[1] + " " + r[2]); }) };
+      return { c: res[0].filter(function (r) { return hit(r[0]); }).slice(0, 5), p: res[1].filter(function (r) { return hit(r[1] + " " + r[2]); }) };
     });
   }
   var qi = $("#q"), sg = $("#sugg");
   if (qi && sg) {
-    var st;
+    var st2;
     qi.addEventListener("input", function () {
-      clearTimeout(st);
-      st = setTimeout(function () {
+      clearTimeout(st2);
+      st2 = setTimeout(function () {
         if (qi.value.trim().length < 2) { sg.hidden = true; return; }
         searchRows(qi.value).then(function (r) {
-          var html = r.c.map(function (c) { return '<a href="' + c[1] + '"><span class="k">' + ({ k: "Kategorie", o: "Oddělení", z: "Značka" }[c[2]] || "") + '</span>' + esc(c[0]) + '</a>'; }).join("")
-            + r.p.slice(0, 7).map(function (p) { return '<a href="/produkt/' + p[0] + '/"><img src="' + esc(p[4]) + '" alt="" referrerpolicy="no-referrer">' + esc(p[1]) + '<small>' + kc(p[3]) + '</small></a>'; }).join("");
-          sg.innerHTML = html || '<p class="muted" style="padding:8px 10px;margin:0">Nic. Ale to tady umíme.</p>'; sg.hidden = false;
+          var html = r.c.map(function (c) { return '<a href="' + c[1] + '"><span class="k">' + ({ k: "Kategorie", o: "Oddělení", z: "Značka", p: "Podkategorie" }[c[2]] || "") + '</span>' + esc(c[0]) + '</a>'; }).join("")
+            + r.p.slice(0, 7).map(function (p) { return '<a href="/produkt/' + p[0] + '/"><img src="' + esc(p[4]) + '" alt="" referrerpolicy="no-referrer">' + esc(p[1]) + '<small>' + kc(p[3]) + '</small></a>'; }).join("")
+            + (r.p.length > 7 ? '<a class="sugg__all" href="/hledat/?q=' + encodeURIComponent(qi.value) + '">Všechny výsledky (' + r.p.length + ")</a>" : "");
+          sg.innerHTML = html || '<p class="muted" style="padding:8px 10px;margin:0">Nic jsme nenašli. Zkus jiné slovo.</p>'; sg.hidden = false;
         });
       }, 160);
     });
@@ -192,7 +255,7 @@
 
   // ------------------------------------------------------------------ the "delivery"
   var STAGES = [
-    { t: 0, n: "Objednávka přijata", notes: ["Systém zaznamenal tvoji objednávku. Taky zaznamenal, že jsi nic nezaplatil. Obojí je v pořádku."] },
+    { t: 0, n: "Objednávka přijata", notes: ["Objednávku jsme přijali. Platba: 0 Kč. Nic se nestrhlo a nic se nestrhne."] },
     { t: 25, n: "Hledáme zboží ve skladu", notes: ["Skladník Ignác prochází regály. Zatím nic. To je dobrá zpráva.", "Čtečka čárových kódů pípá naprázdno."] },
     { t: 90, n: "Balíme", notes: ["Bublinková fólie se pečlivě omotává kolem ničeho.", "Krabice je zalepená. Váží přesně tolik co krabice."] },
     { t: 180, n: "Předáno kurýrovi", notes: ["Kurýr naložil balík a nedůvěřivě s ním zatřásl.", "Balík je na cestě. Nic v něm nedrnčí."] },
@@ -200,8 +263,10 @@
     { t: 480, n: "Doručeno", notes: ["Crrr. Někdo zvoní."] }
   ];
   var COURIERS = ["Vavřinec Nikdo", "Prokop Prázdný", "Bohdana Bezobsahová", "Igor Ničeho", "Žofie Zbytečná", "Dalibor Doručil"];
-  var SHIP = [["kuryr", "Kurýr Nikdo", "Doručí dnes, pokud vůbec"], ["zasilkovna", "Výdejní místo Nikde 0", "Otevřeno nonstop, nikdo tam není"], ["sklad", "Osobní odběr", "Z prázdného skladu v Prázdninové ulici"], ["dron", "Dron", "Přiletí s ničím, zato rychle"]];
-  var PAY = [["nic", "Peněženka Nic", "Zůstatek 0 Kč, a stačí"], ["karta", "Karta 0000 •••• 0000", "Číslo nezadáváš, nemělo by kam"], ["faktura", "Na fakturu", "Kterou nikdo nepošle"], ["dobirka", "Dobírka 0 Kč", "Kurýrovi nic nedáváš, on tobě taky ne"]];
+  var SHIP = [["kuryr", "Kurýr na adresu", "Doručení ještě dnes", "zdarma"], ["vydejni", "Výdejní místo", "Vyzvednutí do 24 hodin", "zdarma"],
+    ["osobne", "Osobní odběr", "Na prodejně, ihned", "zdarma"], ["expres", "Expresní doručení", "Do 2 hodin", "zdarma"]];
+  var PAY = [["karta", "Platební karta", "Visa, Mastercard"], ["wallet", "Apple Pay / Google Pay", "Rychlá platba telefonem"],
+    ["prevod", "Bankovní převod", "Platba předem"], ["dobirka", "Dobírka", "Platba při převzetí"]];
   var hash = function (s) { var h = 0; for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return Math.abs(h); };
   function stageOf(o, now) {
     if (o.opened) return STAGES.length;
@@ -245,48 +310,84 @@
     document.body.appendChild(c); setTimeout(function () { c.remove(); }, 4200);
   }
 
-  // ------------------------------------------------------------------ flow pages
+  // ------------------------------------------------------------------ cart page + checkout
+  function stepper(k) {
+    return '<ol class="stepper">' + ["Košík", "Doprava a platba", "Dodací údaje", "Shrnutí"].map(function (n, i) {
+      return '<li class="' + (i + 1 < k ? "done" : i + 1 === k ? "now" : "") + '"><span>' + (i + 1 < k ? ICON("check", 14) : i + 1) + "</span>" + n + "</li>";
+    }).join("") + "</ol>";
+  }
   function flowCart(el) {
     if (!cart.length) { el.innerHTML = emptyHtml(); return; }
-    el.innerHTML = linesHtml(cart, true) + totalsHtml(cartSum()) + '<p><a class="btn btn--lg" href="/pokladna/">Pokračovat k pokladně</a></p>';
+    el.innerHTML = stepper(1) + '<div class="co-grid"><div>' + linesHtml(cart, true) + '</div><div class="co-side">' + totalsHtml(cartSum())
+      + '<a class="btn btn--lg btn--full" href="/pokladna/">Pokračovat k pokladně</a><p class="muted co-note">Doprava zdarma · Bez registrace</p></div></div>';
   }
-  function optsHtml(name, rows) {
-    return '<div class="opts">' + rows.map(function (r, i) { return '<label class="opt"><input type="radio" name="' + name + '" value="' + r[0] + '"' + (i === 0 ? " checked" : "") + '><span><b>' + esc(r[1]) + '</b><small>' + esc(r[2]) + '</small></span></label>'; }).join("") + "</div>";
+  function optsHtml(name, rows, sel) {
+    return '<div class="opts">' + rows.map(function (r) {
+      return '<label class="opt"><input type="radio" name="' + name + '" value="' + r[0] + '"' + (r[0] === sel ? " checked" : "") + '><span><b>' + esc(r[1]) + (r[3] ? '<em>' + esc(r[3]) + "</em>" : "")
+        + '</b><small>' + esc(r[2]) + '</small></span></label>';
+    }).join("") + "</div>";
   }
   var newId = function () { return "KN-" + String(Date.now()).slice(-6) + String(Math.floor(Math.random() * 90 + 10)); };
-  function flowCheckout(el) {
+  // the address lives ONLY in this object while the page is open: never written to localStorage, never sent anywhere
+  var co = { step: 2, ship: "kuryr", pay: "karta", addr: {} };
+  var FIELDS = [["name", "Jméno a příjmení", "text", "name"], ["street", "Ulice a číslo", "text", "street-address"], ["city", "Město", "text", "address-level2"],
+    ["zip", "PSČ", "text", "postal-code"], ["email", "E-mail", "email", "email"], ["phone", "Telefon", "tel", "tel"]];
+  function coRender() {
+    var el = $("#flow"); if (!el) return;
     if (!cart.length) { el.innerHTML = emptyHtml(); return; }
-    var sum = cartSum();
-    el.innerHTML = '<div class="steps-co">'
-      + '<section class="co-sec"><h2><i>1</i>Doprava</h2>' + optsHtml("ship", SHIP) + '</section>'
-      + '<section class="co-sec"><h2><i>2</i>Doručovací údaje</h2><div class="fake"><div><span>Jméno</span><b>Nikdo Nikdovič</b></div><div><span>Adresa</span><b>Prázdná 0, 000 00 Nikde</b></div>'
-      + '<div><span>Telefon</span><b>nevyplňuješ, nikdo nezavolá</b></div></div><p class="muted" style="font-size:13px;margin:10px 0 0">Žádné osobní údaje nechceme. Tyhle jsou smyšlené a stejné pro všechny.</p></section>'
-      + '<section class="co-sec"><h2><i>3</i>Platba</h2>' + optsHtml("pay", PAY) + '</section>'
-      + '<section class="co-sec"><h2><i>4</i>Shrnutí</h2>' + linesHtml(cart, false) + totalsHtml(sum, '<p><span>Doprava</span><span>0 Kč</span></p>')
-      + '<label class="agree"><input type="checkbox" id="agree"> <span>Beru na vědomí, že mi nic nepřijde a že je to přesně ono.</span></label>'
-      + '<button class="btn btn--lg btn--lime" type="button" id="paybtn" disabled>Zaplatit 0 Kč</button><div id="paystate" aria-live="polite"></div></section></div>';
-    var ag = $("#agree"), pb = $("#paybtn"), lock = false;
-    ag.addEventListener("change", function () { pb.disabled = !ag.checked; });
-    pb.addEventListener("click", function () {
-      if (lock || !ag.checked) return; lock = true; pb.disabled = true;
-      var msgs = ["Ověřujeme, že nic neplatíš…", "Banka nic nezaznamenala. Výborně.", "Hotovo."], i = 0;
-      var ps = $("#paystate"); ps.innerHTML = '<p class="paying"><span class="spin"></span><span>' + msgs[0] + "</span></p>";
-      var t = setInterval(function () { i++; if (i < msgs.length) $("span:last-child", ps).textContent = msgs[i]; }, 700);
-      setTimeout(function () {
-        clearInterval(t);
-        var id = newId(), ship = ($("input[name=ship]:checked") || {}).value || "kuryr", pay = ($("input[name=pay]:checked") || {}).value || "nic";
-        var o = { id: id, at: Date.now(), items: cart.map(function (x) { return { id: x.id, n: x.n, p: x.p, q: x.q, i: x.i, s: x.s, g: x.g, u: x.u, size: x.size }; }),
-          total: cartSum(), ship: ship, pay: pay, courier: COURIERS[hash(id) % COURIERS.length], skip: 0 };
-        setOrders([o].concat(orders)); setCart([]);
-        track("purchase", { value: 0, items: o.items.length });
-        location.href = "/objednavka/#" + id;
-      }, 2200);
-    });
+    var sum = cartSum(), body = "";
+    if (co.step === 2) {
+      body = '<section class="co-sec"><h2>Doprava</h2>' + optsHtml("ship", SHIP, co.ship) + '</section><section class="co-sec"><h2>Platba</h2>' + optsHtml("pay", PAY, co.pay)
+        + '</section><div class="co-nav"><a class="btn btn--ghost" href="/kosik/">Zpět do košíku</a><button class="btn btn--lg" type="button" data-co="3">Pokračovat</button></div>';
+    } else if (co.step === 3) {
+      body = '<section class="co-sec"><h2>Dodací údaje</h2><div class="form">' + FIELDS.map(function (f) {
+        return '<label class="fld' + (f[0] === "street" || f[0] === "name" ? " fld--w" : "") + '"><span>' + f[1] + '</span><input name="' + f[0] + '" type="' + f[2] + '" autocomplete="off" value="' + esc(co.addr[f[0]] || "") + '"></label>';
+      }).join("") + '</div><p class="muted co-note">Údaje nejsou povinné. Nikam je neposíláme ani neukládáme a po dokončení objednávky se zahodí.</p></section>'
+        + '<div class="co-nav"><button class="btn btn--ghost" type="button" data-co="2">Zpět</button><button class="btn btn--lg" type="button" data-co="4">Pokračovat ke shrnutí</button></div>';
+    } else {
+      var s = SHIP.filter(function (x) { return x[0] === co.ship; })[0], p = PAY.filter(function (x) { return x[0] === co.pay; })[0];
+      var who = [co.addr.name, co.addr.street, co.addr.city].filter(Boolean).map(esc).join(", ");
+      body = '<section class="co-sec"><h2>Shrnutí objednávky</h2>' + linesHtml(cart, false)
+        + '<div class="fake"><div><span>Doprava</span><b>' + esc(s[1]) + ' · zdarma</b></div><div><span>Platba</span><b>' + esc(p[1]) + '</b></div>'
+        + (who ? '<div><span>Doručit na</span><b>' + who + '</b></div>' : "") + '</div></section>'
+        + '<div class="co-nav"><button class="btn btn--ghost" type="button" data-co="3">Zpět</button><button class="btn btn--lg btn--pay" type="button" id="paybtn">' + ICON("lock", 18) + 'Zaplatit ' + kc(sum) + '</button></div>'
+        + '<p class="muted co-note">Kliknutím na „Zaplatit“ dokončíš objednávku.</p>';
+    }
+    el.innerHTML = stepper(co.step) + '<div class="co-grid"><div>' + body + '</div><div class="co-side">' + totalsHtml(sum) + '</div></div>';
+    $$("input[name=ship]", el).forEach(function (x) { x.addEventListener("change", function () { co.ship = x.value; }); });
+    $$("input[name=pay]", el).forEach(function (x) { x.addEventListener("change", function () { co.pay = x.value; }); });
+    $$(".form input", el).forEach(function (x) { x.addEventListener("input", function () { co.addr[x.name] = x.value; }); });
+    $$("[data-co]", el).forEach(function (b) { b.addEventListener("click", function () { co.step = +b.getAttribute("data-co"); coRender(); window.scrollTo(0, 0); }); });
+    var pb = $("#paybtn", el);
+    if (pb) pb.addEventListener("click", function () { pay(el, sum); }, { once: true });
   }
+  function pay(el, sum) {
+    var ov = document.createElement("div");
+    ov.className = "payov";
+    ov.innerHTML = '<div class="payov__box" role="dialog" aria-modal="true" aria-live="polite"><div class="spin"></div><p class="payov__t">Zpracováváme platbu…</p><p class="payov__sum">' + kc(sum) + "</p></div>";
+    document.body.appendChild(ov);
+    var box = $(".payov__box", ov);
+    setTimeout(function () { $(".payov__t", box).textContent = "Ověřujeme platbu…"; }, 1200);
+    setTimeout(function () {
+      var id = newId();
+      var o = { id: id, at: Date.now(), items: cart.map(function (x) { return { id: x.id, n: x.n, p: x.p, q: x.q, i: x.i, s: x.s, g: x.g, u: x.u, size: x.size }; }),
+        total: sum, ship: co.ship, pay: co.pay, courier: COURIERS[hash(id) % COURIERS.length], skip: 0 };
+      co.addr = {};                                         // the address is gone: it was never stored
+      setOrders([o].concat(orders)); setCart([]);
+      track("purchase", { value: 0, currency: "CZK", items: o.items.length });
+      box.innerHTML = '<p class="payov__t">Platba dokončena</p><p class="payov__sum"><s>' + kc(sum) + '</s></p><p class="payov__zero">0' + NB + 'Kč</p>'
+        + '<p class="payov__msg">Z účtu se nestrhlo nic. Nikdy. Tohle je KoupímNic: nákup se vším všudy, jen bez placení.<br>Objednávka ' + id + " je i tak na cestě.</p>"
+        + '<a class="btn btn--lg btn--lime" href="/objednavka/#' + id + '">Sledovat zásilku</a>';
+      confetti();
+    }, 2600);
+  }
+  function flowCheckout(el) { co.step = 2; coRender(); }
+
+  // ------------------------------------------------------------------ order tracking, unboxing, receipt
   var timer;
   function flowOrder(el) {
     var id = location.hash.slice(1), o = orders.filter(function (x) { return x.id === id; })[0] || orders[0];
-    if (!o) { el.innerHTML = '<h1>Žádná objednávka</h1><p>Zatím sis nic nekoupil. Napravit se to dá během chvilky a za 0 Kč.</p><p><a class="btn" href="/">Jdu vybírat</a></p>'; return; }
+    if (!o) { el.innerHTML = '<h1>Žádná objednávka</h1><p>Zatím jsi nic neobjednal.</p><p><a class="btn" href="/">Nakupovat</a></p>'; return; }
     if (location.hash.slice(1) !== o.id) history.replaceState(null, "", "#" + o.id);
     clearInterval(timer);
     var draw = function () {
@@ -299,7 +400,7 @@
         return '<li class="' + (i < k ? "done" : i === k ? "now" : "") + '"><span>' + s.n + '</span><small>' + (i <= k ? at.toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" }) : "") + "</small></li>";
       }).join("");
       var left = Math.max(0, Math.ceil((total - el2) / 60));
-      el.innerHTML = '<div class="ord__h"><h1>Objednávka je na cestě</h1><span class="ord__id">' + o.id + " · " + kc(o.total) + " → 0 Kč</span></div>"
+      el.innerHTML = '<div class="ord__h"><h1>Objednávka je na cestě</h1><span class="ord__id">' + o.id + " · zaplaceno 0" + NB + "Kč</span></div>"
         + '<section class="track"><div class="road"><span class="road__wh">' + ICON("box") + '</span><span class="road__home">' + ICON("bell") + '</span>'
         + '<span class="road__c" style="left:' + (k < 3 ? 12 : Math.max(12, pos)) + '%"><img src="/img/ui/courier.webp" alt="" width="104" height="75"></span></div>'
         + '<p class="stage">' + (k >= 5 ? "Kurýr zvoní" : st.n) + '</p><p class="stage__note">' + esc(note) + (k >= 3 && k < 5 ? " Kurýr: " + esc(o.courier) + "." : "") + "</p>"
@@ -308,7 +409,7 @@
           : '<p class="muted" style="margin:10px 0 0">Doručení zhruba za ' + left + " " + plural(left, "minutu", "minuty", "minut") + ". Můžeš mezitím nakupovat dál, zazvoníme.</p>"
             + '<div class="ord__act"><button class="btn btn--sm btn--ghost" type="button" id="skip">Přeskočit čekání</button><a class="btn btn--sm btn--ghost" href="/">Nakupovat dál</a></div>')
         + '<ol class="tl">' + tl + "</ol></section>"
-        + '<details class="co-sec"><summary><b>Co jsi objednal (' + o.items.length + ')</b></summary>' + linesHtml(o.items.map(function (x) { return Object.assign({ k: x.id }, x); }), false) + "</details>";
+        + '<details class="co-sec"><summary><b>Obsah objednávky (' + o.items.length + ')</b></summary>' + linesHtml(o.items.map(function (x) { return Object.assign({ k: x.id }, x); }), false) + "</details>";
       var sk = $("#skip");
       if (sk) sk.addEventListener("click", function () { o.skip = total - (Date.now() - o.at) / 1000; persist(o); if (actx && actx.resume) actx.resume(); draw(); });
       var od = $("#opendoor");
@@ -329,7 +430,7 @@
       var b = this; if (b.classList.contains("open")) return;
       b.classList.add("open"); confetti();
       setTimeout(function () { o.opened = Date.now(); persist(o); receipt(el, o, true); }, 1800);
-    }, { once: false });
+    });
   }
   var EQUIV = [[79, "káv v kavárně", "káva", "kávy"], [239, "pizz z rozvozu", "pizza", "pizzy"], [229, "lístků do kina", "lístek do kina", "lístky do kina"], [259, "měsíců streamování", "měsíc streamování", "měsíce streamování"]];
   function wage() { var w = +load("wage:v1", 35000); return w > 1000 ? w : 35000; }
@@ -345,20 +446,20 @@
       var w = wants.some(function (y) { return y.id === x.id; });
       return '<li class="want"><img src="' + esc(x.i) + '" alt="" loading="lazy" referrerpolicy="no-referrer"><div class="want__n"><b>' + esc(x.n) + '</b><br><span class="muted">' + kc(x.p) + " u obchodu " + esc(x.s) + "</span></div>"
         + '<div class="want__a"><button class="btn btn--sm btn--ghost" type="button" data-want="' + esc(x.id) + '"' + (w ? " disabled" : "") + ">" + ICON("clock", 16) + (w ? "V karanténě" : "Karanténa 72 h") + "</button>"
-        + '<a class="btn btn--sm btn--ghost" href="' + esc(x.g) + '" rel="sponsored nofollow noopener" target="_blank" data-go="1">Fakt to chci ' + ICON("ext", 14) + '</a> <span class="tag-ad">Reklama</span></div></li>';
+        + '<a class="btn btn--sm btn--ghost" href="' + esc(x.g) + '" rel="sponsored nofollow noopener" target="_blank" data-go="1">Fakt to chci ' + ICON("ext", 14) + '</a><span class="tag-ad">Reklama</span></div></li>';
     }).join("");
     el.innerHTML = '<div class="ord__h"><h1>' + (fresh ? "Doručeno. Uvnitř nic." : "Účtenka") + '</h1><span class="ord__id">' + o.id + "</span></div>"
-      + '<div class="receipt"><h2>KOUPÍMNIC.CZ</h2><p class="c">Nákupní galerie nanečisto</p><p class="c">' + d.toLocaleDateString("cs-CZ") + " " + d.toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" }) + " · č. " + o.id + "</p><hr>"
+      + '<div class="receipt"><span class="stamp">ZAPLACENO<br>NIČÍM</span><h2>KOUPÍMNIC.CZ</h2><p class="c">Nákupní galerie nanečisto</p><p class="c">' + d.toLocaleDateString("cs-CZ") + " " + d.toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" }) + " · č. " + o.id + "</p><hr>"
       + items + '<hr><p class="r big"><span>CELKEM</span><span>' + kc(o.total) + '</span></p><p class="r"><span>Sleva za rozum</span><span>−' + kc(o.total) + '</span></p>'
-      + '<p class="r big"><span>K ÚHRADĚ</span><span>0,00 Kč</span></p><hr><p class="saved">NEUTRACENO<b>' + kc(o.total) + "</b></p>"
-      + '<p class="c">Doručil: ' + esc(o.courier) + '. Uvnitř: nic, přesně podle objednávky.</p><span class="stamp">ZAPLACENO<br>NIČÍM</span></div>'
+      + '<p class="r big"><span>ZAPLACENO</span><span>0,00' + NB + 'Kč</span></p><hr><p class="saved">NEUTRACENO<b>' + kc(o.total) + "</b></p>"
+      + '<p class="c">Doručil: ' + esc(o.courier) + '. Uvnitř: nic, přesně podle objednávky.</p></div>'
       + "<h2>Za tyhle peníze by sis mohl dát</h2>" + equivHtml(o.total)
       + '<div class="piggy"><img src="/img/ui/piggy.webp" alt="" width="96" height="96"><div><span class="muted">Celkem jsi na KoupímNic neutratil</span><b>' + kc(savedTotal()) + "</b>"
       + '<button class="btn btn--sm btn--ghost" type="button" id="share">' + ICON("share", 16) + "Pochlubit se</button></div></div>"
       + "<h2>Pořád to chceš?</h2><p>Dej tomu tři dny v karanténě. Když tě to pak pořád bude lákat, koupíš to s čistým svědomím. Odkaz „Fakt to chci“ vede do obchodu a je reklamní.</p>"
       + '<ul class="wants">' + real + "</ul>"
       + '<p class="honestbox">Poctivě: z účtu ti nic neubylo, takže jsi nic „neušetřil“ v pravém smyslu. Jen ses nenechal unést. I to se počítá.</p>'
-      + '<p class="ord__act"><a class="btn" href="/">Nakoupit znovu nanečisto</a><a class="btn btn--ghost" href="/moje-uspory/">Moje úspory</a></p>';
+      + '<p class="ord__act"><a class="btn" href="/">Nakupovat dál</a><a class="btn btn--ghost" href="/moje-uspory/">Moje úspory</a></p>';
     bindReceipt(el);
   }
   function bindReceipt(el) {
@@ -388,17 +489,17 @@
       var left = x.at + H - now, ready = left <= 0, hrs = Math.ceil(left / 36e5);
       return '<li class="want"><img src="' + esc(x.i) + '" alt="" loading="lazy" referrerpolicy="no-referrer"><div class="want__n"><b>' + esc(x.n) + "</b><br>"
         + (ready ? '<span style="color:var(--green);font-weight:700">Tři dny uplynuly. Pořád to chceš?</span>' : '<span class="muted">V karanténě ještě ' + hrs + " " + plural(hrs, "hodinu", "hodiny", "hodin") + "</span>") + "</div>"
-        + '<div class="want__a">' + (ready ? '<a class="btn btn--sm" href="' + esc(x.g) + '" rel="sponsored nofollow noopener" target="_blank" data-go="1">Ano, koupit u ' + esc(x.s) + "</a> " : "")
+        + '<div class="want__a">' + (ready ? '<a class="btn btn--sm" href="' + esc(x.g) + '" rel="sponsored nofollow noopener" target="_blank" data-go="1">Ano, koupit u ' + esc(x.s) + "</a>" : "")
         + '<button class="btn btn--sm btn--ghost" type="button" data-unwant="' + esc(x.id) + '">' + (ready ? "Ne, pustit z hlavy" : "Už to nechci") + "</button>"
-        + (ready ? ' <span class="tag-ad">Reklama</span>' : "") + "</div></li>";
+        + (ready ? '<span class="tag-ad">Reklama</span>' : "") + "</div></li>";
     }).join("");
     el.innerHTML = '<div class="piggy"><img src="/img/ui/piggy.webp" alt="" width="96" height="96"><div><span class="muted">Celkem neutraceno</span><b>' + kc(tot) + "</b>"
-      + '<span class="muted">' + act.length + " " + plural(act.length, "objednávka", "objednávky", "objednávek") + " nanečisto</span></div></div>"
-      + (tot ? "<h2>To je</h2>" + equivHtml(tot) : '<p>Zatím nic. Prasátko čeká na první nákup, který nezaplatíš. <a class="lnk" href="/">Jdu vybírat</a></p>')
-      + "<h2>Karanténa přání</h2>" + (wl ? '<ul class="wants">' + wl + "</ul>" : '<p class="muted">Prázdná. Věci sem dáš z účtenky po „doručení“.</p>')
-      + (act.length ? "<h2>Historie</h2><ul class=\"hist\">" + act.map(function (o) {
+      + '<span class="muted">' + act.length + " " + plural(act.length, "objednávka", "objednávky", "objednávek") + "</span></div></div>"
+      + (tot ? "<h2>To je</h2>" + equivHtml(tot) : '<p>Zatím nic. <a class="lnk" href="/">Jdi nakupovat</a></p>')
+      + "<h2>Karanténa přání</h2>" + (wl ? '<ul class="wants">' + wl + "</ul>" : '<p class="muted">Prázdná. Věci sem dáš z účtenky po doručení.</p>')
+      + (act.length ? "<h2>Historie objednávek</h2><ul class=\"hist\">" + act.map(function (o) {
         return '<li><a href="/objednavka/#' + o.id + '"><span><b>' + o.id + "</b> · " + o.items.length + " " + plural(o.items.length, "položka", "položky", "položek")
-          + "<br><small>" + new Date(o.at).toLocaleDateString("cs-CZ") + "</small></span><span><b>" + kc(o.total) + "</b><br><small>" + (o.opened ? "rozbaleno" : "na cestě") + "</small></span></a></li>";
+          + "<br><small>" + new Date(o.at).toLocaleDateString("cs-CZ") + "</small></span><span><b>" + kc(o.total) + "</b><br><small>" + (o.opened ? "doručeno" : "na cestě") + "</small></span></a></li>";
       }).join("") + "</ul>" : "")
       + '<p class="muted" style="margin-top:24px;font-size:14px">Všechno je uložené jen v tomhle prohlížeči. <button class="rm" type="button" id="wipe">Smazat moje data</button></p>';
     bindReceipt(el);
@@ -412,10 +513,10 @@
     if (q.trim().length < 2) { el.innerHTML = '<p class="muted">Napiš aspoň dvě písmena do vyhledávání nahoře.</p>'; return; }
     searchRows(q).then(function (r) {
       var cats = r.c.map(function (c) { return '<a href="' + c[1] + '">' + esc(c[0]) + "</a>"; }).join("");
-      var rows = r.p.slice(0, 120).map(function (p) { return cardHtml([p[0], p[1], -1, p[3], 0, p[4], "", ""], []).replace('<span class="card__b">&nbsp;</span>', '<span class="card__b">' + esc(p[2]) + "</span>"); });
+      var rows = r.p.slice(0, 120).map(function (p) { return cardHtml({ id: p[0], n: p[1], b: p[2], p: p[3], w: 0, i: p[4], s: "", g: "", u: "/produkt/" + p[0] + "/" }); });
       el.innerHTML = '<p class="lead">„' + esc(q) + "“: " + (r.p.length ? r.p.length + (r.p.length >= 120 ? "+" : "") + " " + plural(r.p.length, "produkt", "produkty", "produktů") : "nic") + "</p>"
-        + (cats ? '<nav class="chips">' + cats + "</nav>" : "") + (rows.length ? '<div class="grid" style="margin-top:18px">' + rows.join("") + "</div>" : '<p>Nic jsme nenašli. Zkus jiné slovo, třeba „iPhone“ nebo „tenisky“.</p>');
-      $$(".card__add", el).forEach(function (b) { b.remove(); });
+        + (cats ? '<nav class="chips">' + cats + "</nav>" : "") + (rows.length ? '<div class="grid" style="margin-top:18px">' + rows.join("") + "</div>" : "<p>Nic jsme nenašli. Zkus jiné slovo, třeba „iPhone“ nebo „LEGO“.</p>");
+      $$(".card__add", el).forEach(function (b) { b.remove(); });     // search rows carry no shop link: open the product instead
     });
   }
 

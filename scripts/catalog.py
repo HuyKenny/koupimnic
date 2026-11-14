@@ -87,7 +87,7 @@ def load_offers(shops):
     for s in shops:
         n0 = len(out)
         for r in read_shop(s, full):
-            cat = X.classify(r, s)
+            cat, sub = X.classify_any(r, s)
             if not cat:
                 dropped[s["id"] + ":range"] += 1
                 continue
@@ -104,7 +104,7 @@ def load_offers(shops):
                 "brand": X.brand_of(r) or s.get("brand", ""), "ean": norm_ean(r.get("ean")), "img": https(r.get("img")),
                 "imgs": [https(u) for u in r.get("imgs") or [] if u][:4], "price": round(price), "was": round(float(r.get("was") or 0)),
                 "url": r.get("url") or "", "go": r["go"], "cat": cat, "size": X.clean_size(r.get("size") or ""), "col": X.clean(r.get("col") or "")[:30],
-                "market": bool(s.get("marketplace")),
+                "market": bool(s.get("marketplace")), "sub": sub,
             })
             per_cat[cat] += 1
         STATS.setdefault("offers_per_shop", {})[s["id"]] = len(out) - n0
@@ -164,6 +164,7 @@ def cluster(offers, shop_rank):
     products = []
     for allo in groups.values():
         cats = Counter(o["cat"] for o in allo)
+        subs = Counter(o["sub"] for o in allo if o.get("sub"))
         best = {}
         for o in sorted(allo, key=lambda o: o["price"]):
             best.setdefault(o["shop"], o)
@@ -185,6 +186,7 @@ def cluster(offers, shop_rank):
             "cat": cats.most_common(1)[0][0], "desc": max((o["desc"] for o in allo), key=len), "img": img, "imgs": imgs[:6],
             "offers": [{"shop": o["shop"], "price": o["price"], "was": o["was"], "go": o["go"], "url": o["url"]} for o in offs],
             "price": offs[0]["price"], "was": offs[0]["was"], "sizes": sizes[:30], "color": rep["col"], "ean": eans[0] if eans else "",
+            "sub": subs.most_common(1)[0][0] if subs else "",
         })
     return products
 
@@ -193,11 +195,16 @@ def discount(p):
     return round(100 * (p["was"] - p["price"]) / p["was"]) if p.get("was") and p["was"] > p["price"] else 0
 
 
+DEPT_BONUS = {"elektronika": 25, "damska-moda": 15, "panska-moda": 15, "boty": 18, "doplnky": 12, "krasa": 10, "domov": 10, "hracky": 10,
+              "sport": 8, "drogerie": 4, "zvirata": 0, "knihy": -5}    # Kenny: iPhones, MacBooks, computers, clothes and shoes first
+
+
 def quality(p):
     """What makes a product worth its place: sold in several shops, a dream brand, a real photo and description, a real
     discount, and a bit of price (a 30 000 Kč MacBook is more of a dopamine hit than a 300 Kč T-shirt)."""
     return (100 * (len(p["offers"]) - 1) + (40 if X.top_brand(p["brand"]) else 0) + (10 if p["brand"] else 0) + (5 if p["imgs"] else 0)
-            + (8 if discount(p) >= 15 else 0) + (5 if len(p["desc"]) >= 120 else 0) + min(15, 3 * math.log10(max(p["price"], 10))))
+            + (8 if discount(p) >= 15 else 0) + (5 if len(p["desc"]) >= 120 else 0) + min(15, 3 * math.log10(max(p["price"], 10)))
+            + DEPT_BONUS.get(X.CATS[p["cat"]][1], 0))
 
 
 def select(products):

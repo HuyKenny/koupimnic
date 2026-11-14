@@ -12,6 +12,7 @@ PER_PAGE = 48
 OPERATOR = {"name": "Ha Duy Huy", "address": "Bartáková 36, 140 00 Praha", "ico": "07876823", "vat": "není plátce DPH",
             "email": "info@koupimnic.cz"}   # public business-register data (ARES), the site operator on legal pages
 NAV = list(X.DEPTS)
+SHORT = {"boty": "Boty", "doplnky": "Doplňky", "krasa": "Parfémy", "drogerie": "Drogerie", "domov": "Domov", "hracky": "Hračky a LEGO", "sport": "Sport"}
 
 
 def kc(n):
@@ -117,7 +118,7 @@ class Site:
                 f'<li><a href="{u}">{E(n)}</a></li>' if i < len(crumbs) - 1 else f'<li aria-current="page">{E(n)}</li>' for i, (n, u) in enumerate(crumbs)) + "</ol></nav>"
         og = og_img or self.url("/img/ui/og.png")
         pre = f'<link rel="preload" as="image" href="{E(preload_img)}" fetchpriority="high">' if preload_img else ""
-        nav = "".join(f'<a href="/{d}/"{" aria-current=true" if path.startswith(f"/{d}/") else ""}>{E(X.DEPTS[d][0])}</a>' for d in NAV if d in self.dept_ok)
+        nav = "".join(f'<a href="/{d}/"{" aria-current=true" if path.startswith(f"/{d}/") else ""}>{E(SHORT.get(d, X.DEPTS[d][0]))}</a>' for d in NAV if d in self.dept_ok)
         ga = f' data-ga="{E(self.ga4)}"' if self.ga4 else ""
         return f"""<!doctype html><html lang="cs"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{E(title)}</title><meta name="description" content="{E(desc)}">{robots}<link rel="canonical" href="{self.url(canon)}">
@@ -129,22 +130,25 @@ class Site:
 <script type="speculationrules">{{"prefetch":[{{"where":{{"and":[{{"href_matches":"/*"}},{{"not":{{"href_matches":"/go/*"}}}},{{"not":{{"href_matches":"/objednavka/*"}}}}]}},"eagerness":"moderate"}}]}}</script>
 </head><body class="{cls}"{ga}>
 <a class="skip" href="#main">Přeskočit na obsah</a>
-<div class="sim">Nakupuješ nanečisto: platíš 0 Kč a nic ti nepřijde. Produkty a ceny jsou skutečné, z českých e-shopů.</div>
+<div class="sim">KoupímNic – nákupní galerie nanečisto. Ceny a produkty jsou skutečné, z českých e-shopů.</div>
 <header class="hd"><div class="wrap hd__in">
 <a class="logo" href="/" aria-label="KoupímNic – úvod"><img src="/img/ui/logo.webp" alt="KoupímNic" width="137" height="36"></a>
-<form class="search" action="/hledat/" role="search"><label class="sr" for="q">Hledat</label><input id="q" name="q" type="search" placeholder="iPhone, tenisky, parfém…" autocomplete="off" enterkeyhint="search">
+<button class="hd__cats" type="button" data-mega aria-expanded="false" aria-controls="mega">{icon("menu", 20)}<span>Kategorie</span></button>
+<form class="search" action="/hledat/" role="search"><label class="sr" for="q">Hledat</label><input id="q" name="q" type="search" placeholder="Hledat mezi {self.stats.get("products_fmt", "tisíci")} produkty" autocomplete="off" enterkeyhint="search">
 <button type="submit" aria-label="Hledat">{icon("search", 20)}</button><div class="sugg" id="sugg" hidden></div></form>
-<a class="hd__save" href="/moje-uspory/" title="Moje úspory">{icon("piggy", 22)}<span data-saved>0&nbsp;Kč</span></a>
-<button class="hd__cart" type="button" data-open-cart aria-label="Košík">{icon("bag", 24)}<span class="badge" data-count hidden>0</span></button>
-</div><nav class="dn wrap" aria-label="Oddělení">{nav}</nav></header>
+<a class="hd__save" href="/moje-uspory/" title="Moje úspory" data-saved-pill hidden>{icon("piggy", 22)}<span data-saved>0&nbsp;Kč</span></a>
+<button class="hd__cart" type="button" data-open-cart aria-label="Košík">{icon("bag", 22)}<span class="hd__sum" data-sum>Košík</span><span class="badge" data-count hidden>0</span></button>
+</div><nav class="dn wrap" aria-label="Oddělení">{nav}</nav>
+<div class="mega" id="mega" hidden><div class="wrap mega__in" id="mega-in"></div></div></header>
+<div class="perks-bar"><div class="wrap"><span>{icon("truck", 16)}Doprava zdarma</span><span>{icon("lock", 16)}Bez registrace</span><span>{icon("check", 16)}Platba až na konci objednávky</span><span>{icon("box", 16)}Doručení ještě dnes</span></div></div>
 <div class="orderpill" id="orderpill" hidden></div>
 {bc}<main id="main" class="{'' if 'wide' in cls else ''}">{body}</main>
 <footer class="ft"><div class="wrap ft__in">
-<div><img src="/img/ui/logo.webp" alt="KoupímNic" width="137" height="36" loading="lazy"><p>Nákupní galerie nanečisto. Vyber si cokoli, zaplať nic a nech dopamin udělat svou práci bez výpisu z účtu.</p></div>
+<div><img src="/img/ui/logo.webp" alt="KoupímNic" width="137" height="36" loading="lazy"><p>Nákupní galerie nanečisto. Skutečné produkty a ceny z českých e-shopů, nákup jako všude jinde. Jen na konci se nic nestrhne.</p></div>
 <div><h2>Oddělení</h2><ul>{"".join(f'<li><a href="/{d}/">{E(X.DEPTS[d][0])}</a></li>' for d in NAV if d in self.dept_ok)}</ul></div>
 <div><h2>KoupímNic</h2><ul><li><a href="/jak-to-funguje/">Jak to funguje</a></li><li><a href="/moje-uspory/">Moje úspory</a></li><li><a href="/znacky/">Značky</a></li>
 <li><a href="/obchody/">Obchody</a></li><li><a href="/kontakt/">Kontakt</a></li><li><a href="/ochrana-osobnich-udaju/">Soukromí a cookies</a></li></ul></div>
-<div><h2>Poctivě</h2><p>Nic tu neprodáváme a nic neplatíš. Odkazy „Koupit doopravdy“ vedou do e-shopů a jsou reklamní: když tam nakoupíš, můžeme dostat provizi. Tebe to nestojí nic navíc.</p></div>
+<div><h2>Poctivě</h2><p>KoupímNic je nákup nanečisto: nic tu neprodáváme a z účtu se nic nestrhne. Odkazy „Koupit doopravdy“ vedou do e-shopů a jsou reklamní, když tam nakoupíš, můžeme dostat provizi.</p></div>
 </div><div class="wrap ft__op"><p>Provozovatel: {OPERATOR["name"]}, {OPERATOR["address"]}, IČO {OPERATOR["ico"]}, {OPERATOR["vat"]}. <a href="mailto:{OPERATOR["email"]}">{OPERATOR["email"]}</a>.
 Ceny a dostupnost přebíráme z e-shopů a mohou se změnit. Aktualizováno {self.stats.get("updated", "")}.</p></div></footer>
 <div class="drawer" id="cart" hidden><div class="drawer__bg" data-close></div><aside class="drawer__panel" role="dialog" aria-modal="true" aria-labelledby="cart-h">
@@ -169,9 +173,9 @@ Ceny a dostupnost přebíráme z e-shopů a mohou se změnit. Aktualizováno {se
         data = E(json.dumps(self.item_data(p), ensure_ascii=False, separators=(",", ":")))
         return (f'<article class="card"><a class="card__a" href="/produkt/{p["slug"]}/"><span class="card__img"><img src="{E(img)}" alt="" '
                 f'{"loading=lazy " if lazy and not eager else ""}{"fetchpriority=high " if eager else ""}decoding="async" referrerpolicy="no-referrer" width="320" height="320" data-orig="{E(p["img"])}">{badge}</span>'
-                f'<span class="card__b">{E(p["brand"]) if p["brand"] else "&nbsp;"}</span><span class="card__n">{E(shorten(p["name"], 90))}</span>'
-                f'<span class="card__p"><b>{kc(p["price"])}</b>{was}</span></a>'
-                f'<button class="card__add" type="button" data-add="{data}" aria-label="Přidat do košíku: {E(shorten(p["name"], 60))}">{icon("plus", 20)}</button></article>')
+                f'<span class="card__b">{E(p["brand"]) if p["brand"] else "&nbsp;"}</span><span class="card__n">{E(shorten(p["name"], 90))}</span></a>'
+                f'<div class="card__foot"><span class="card__p"><b>{kc(p["price"])}</b>{was}</span><span class="card__st">Skladem</span>'
+                f'<button class="card__add" type="button" data-add="{data}">{icon("bag", 18)}<span>Do košíku</span></button></div></article>')
 
     def grid(self, items, first_eager=0):
         return '<div class="grid">' + "".join(self.card(p, eager=i < first_eager) for i, p in enumerate(items)) + "</div>"
