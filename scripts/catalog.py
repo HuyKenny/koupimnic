@@ -25,7 +25,7 @@ STATE = APP / "data/state"
 TODAY = date.today()
 DAY = TODAY.toordinal()
 GONE_DAYS = 30
-MAX_PRODUCTS = int(os.environ.get("KNC_MAX_PRODUCTS", "300000"))
+MAX_PRODUCTS = int(os.environ.get("KNC_MAX_PRODUCTS") or 0) or 300000   # 0 / unset = the default cap (Kenny: max 300 000)
 STATS = {}
 
 
