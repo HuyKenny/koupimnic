@@ -208,7 +208,7 @@ def xml_items(resp):
             k = local(ch.tag)
             if k == "PARAM":
                 params.append(((ch.findtext("PARAM_NAME") or "").strip().lower(), (ch.findtext("VAL") or "").strip()))
-            elif k in ("IMGURL_ALTERNATIVE", "additional_image_link"):
+            elif k in ("IMGURL_ALTERNATIVE", "additional_image_link", "ADDITIONAL_IMAGE_LINK"):
                 imgs.append((ch.text or "").strip())
             else:
                 d.setdefault(k, (ch.text or "").strip())
@@ -222,16 +222,26 @@ def xml_offers(shop, resp, link_of):
     for kind, d, params, imgs in xml_items(resp):
         pmap = {k: v for k, v in params}
         if kind == "SHOPITEM":
-            pid = d.get("ITEM_ID") or d.get("ID") or d.get("PRODUCTID")      # idea-nabytek: <ID>
-            title = d.get("PRODUCTNAME") or d.get("PRODUCT") or d.get("NAME")
-            url, img = d.get("URL"), d.get("IMGURL") or d.get("IMAGE_MAIN")
+            # Heureka SHOPITEM, also the "Google fields in capitals" variant (Smarty via AffiliatePort: TITLE/LINK/IMAGE_LINK/GTIN)
+            pid = d.get("ITEM_ID") or d.get("ID") or d.get("PRODUCTID") or d.get("PRODUCTNO") or d.get("EAN") or d.get("URL")   # pocitace24: no ITEM_ID
+            title = d.get("PRODUCTNAME") or d.get("PRODUCT") or d.get("NAME") or d.get("TITLE")
+            url, img = d.get("URL") or d.get("LINK"), d.get("IMGURL") or d.get("IMAGE_MAIN") or d.get("IMAGE_LINK")
             price, cur = price_of(d.get("PRICE_VAT") or d.get("PRICE"))
+            sale, _ = price_of(d.get("SALE_PRICE"))
             cur = (d.get("CURRENCY") or cur or "").upper()
-            ean = d.get("EAN") or pmap.get("ean") or ""
-            brand, cat, desc = d.get("MANUFACTURER", ""), d.get("CATEGORYTEXT") or d.get("CATEGORY_FULL") or "", d.get("DESCRIPTION") or d.get("SHORTDESCRIPTION") or ""
+            ean = d.get("EAN") or d.get("GTIN") or pmap.get("ean") or ""
+            brand = d.get("MANUFACTURER") or d.get("BRAND") or ""
+            cat = d.get("CATEGORYTEXT") or d.get("CATEGORY_FULL") or d.get("PRODUCT_TYPE") or ""
+            desc = d.get("DESCRIPTION") or d.get("SHORTDESCRIPTION") or ""
             if (d.get("STORE_STATE") or "").lower() in ("0", "false", "out of stock", "vyprodano", "nedostupne"):
                 continue
+            if (d.get("AVAILABILITY") or "in stock").lower().replace("_", " ") not in ("in stock", "instock", "preorder", "backorder"):
+                continue
+            if (d.get("CONDITION") or "new").lower() not in ("new", "nový", "novy"):
+                continue                       # used / refurbished phones are not the dopamine we sell
             was = 0
+            if 0 < sale < price:
+                price, was = sale, price
         else:
             pid, title, url, img = d.get("id"), d.get("title"), d.get("link"), d.get("image_link")
             if (d.get("availability") or "in stock").lower().replace("_", " ") not in ("in stock", "instock", "preorder", "backorder"):
@@ -240,6 +250,8 @@ def xml_offers(shop, resp, link_of):
             sale, _ = price_of(d.get("sale_price"))
             price, was = (sale, regular) if 0 < sale < regular else (regular, 0)
             ean, brand, cat, desc = d.get("gtin", ""), d.get("brand", ""), d.get("product_type", "") or d.get("google_product_category", ""), d.get("description", "")
+            if (d.get("condition") or "new").lower() != "new":
+                continue
         if shop.get("cat_field"):               # aulix: product_type is wrong ("Zahrada > …" for every lamp)
             cat = d.get(shop["cat_field"]) or cat
         if cur and cur != "CZK":

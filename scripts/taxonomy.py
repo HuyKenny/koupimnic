@@ -118,7 +118,7 @@ VETO_TITLE = T(r"\b(kryt|krytu|obal|obaly|pouzdr\w*|ochrann\w* (sklo|fóli\w*|fo
                r"palmrest|matrice|displej\w* (pro|do|k)|lcd panel|základní desk\w*|ventilátor (pro|do)|pant\w* (pro|do)|touchpad|klávesnice (pro|do|k)|"
                r"battery|nástav\w*|součást\w*|kartáč\w*|tyč\w*|selfie|filtr\w*|kombo|kytarov\w* (kombo|zesilovač)|podomítkov\w*|"
                r"autorádio|rádio android|navigace|carplay|android auto|"
-               r"kapodastr\w*|trsátk\w*|struny|popruh\w*|stojan\w*)\b|\bsada \d+ ks|\b\d+\s?ks\b|\b\d+-?pack\b")
+               r"kapodastr\w*|trsátk\w*|struny|popruh\w*|stojan\w*|ochrann\w* sad\w*|sklo na|safírov\w* sklo|podstav\w*|podložk\w*)\b|\bsada \d+ ks|\b\d+\s?ks\b|\b\d+-?pack\b")
 VETO_PATH = T(r"\b(Dítě|Děti|Dětsk\w*|Junior\w*|Kids|Chlapec|Chlapci|Dívka|Dívky|Kojen\w*|Batol\w*|Home|Bydlení|Náhradní díl\w*|"
               r"Doplňky výživy|Krmiv\w*|Zvířat\w*|Sexshop|Erotik\w*|Knihy|Elektroinstalační\w*|Nářadí a stavebniny|Osvětlení|Zahrad\w*|"
               r"Vzorky|Dárkové poukazy|Ponožky|Punčoch\w*|2\. jakost|Příslušenství pro|Příslušenství k|Doporučené příslušenství|Náhradní)\b")
