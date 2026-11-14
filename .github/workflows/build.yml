@@ -22,6 +22,10 @@ on:
         description: "Full run: also add new and remove vanished products (off = prices only)"
         type: boolean
         default: false
+      sample:
+        description: "Quick launch: at most this many offers per CJ shop (0 = everything). The next run is then a full run automatically."
+        type: string
+        default: "0"
       feeds_only:
         description: "Fetch only the XML feeds (eHub / AffiliatePort), keep CJ from the saved state (minutes instead of ~2 h)"
         type: boolean
@@ -81,6 +85,7 @@ jobs:
           CJ_CID: ${{ secrets.CJ_CID }}
           CJ_PID: ${{ secrets.CJ_PID }}
           FEEDS_JSON: ${{ secrets.FEEDS_JSON }}
+          FETCH_LIMIT: ${{ github.event_name == 'workflow_dispatch' && inputs.sample || '0' }}
       - name: Freeze the product range (full run, or first run without a snapshot)
         run: |
           NEW=$(python3 -c "import sys;sys.path.insert(0,'scripts');import catalog as C;print(' '.join(C.new_shops()))" 2>/dev/null || true)
@@ -128,6 +133,9 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Sample run - drop the frozen range so the next run fetches and builds everything
+        if: github.event_name == 'workflow_dispatch' && inputs.sample != '0' && inputs.sample != ''
+        run: rm -rf data/weekly && echo "sample run - next run is a full run"
       - name: Save state (encrypted)
         if: always()
         run: '[ -f data/state/state.json.gz ] && scripts/state.sh push || echo "no state to save"'
