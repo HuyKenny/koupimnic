@@ -182,6 +182,14 @@ def main():
     S = R.Site(BASE, ENV, GA4, css_name, js_name, shop_meta, stats)
     GL.write_go(out, go_tpl, shop_meta)
 
+    # one spelling per brand ("LEGO" / "Lego" -> the most common one)
+    spell = defaultdict(Counter)
+    for p in products:
+        if p["brand"]:
+            spell[X.slugify(p["brand"])][p["brand"]] += 1
+    for p in products:
+        if p["brand"]:
+            p["brand"] = spell[X.slugify(p["brand"])].most_common(1)[0][0]
     by_cat, by_dept, by_brand, by_shop = defaultdict(list), defaultdict(list), defaultdict(list), defaultdict(list)
     for p in products:
         by_cat[p["cat"]].append(p)
@@ -214,7 +222,12 @@ def main():
         for b, n in Counter(p["brand"] for p in ps if p["brand"]).most_common(24):
             bs = X.slugify(b)
             if n >= MIN_BRAND_SUB and bs and bs not in taken[c] and bs not in X.TREE:
-                brand_subs[(c, bs)] = (b, [p for p in ps if p["brand"] == b])
+                bps = [p for p in ps if p["brand"] == b]
+                # skip "Apple" next to "iPhone": a hand-written sub already holds most of the brand
+                top_sub = Counter(p["sub"] for p in bps if p["sub"]).most_common(1)
+                if top_sub and top_sub[0][1] >= 0.6 * len(bps):
+                    continue
+                brand_subs[(c, bs)] = (b, bps)
     S.subs = {k: X.sub_name(*k) for k in subs}
     S.brand_subs = {k: v[0] for k, v in brand_subs.items()}
     S.ctx = {"by_cat": by_cat, "brands": brand_pages, "brand_name": brand_name, "by_sub": subs}
