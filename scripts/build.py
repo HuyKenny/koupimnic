@@ -215,7 +215,7 @@ def main():
     for (c, sl) in subs:
         taken[c].add(sl)
         taken[c].add(X.slugify(X.sub_name(c, sl)))
-    brand_subs = {}
+    brand_subs, sub_redirects = {}, {}
     for c, ps in by_cat.items():
         if c not in S.cat_ok:
             continue
@@ -226,10 +226,13 @@ def main():
                 # skip "Apple" next to "iPhone": a hand-written sub already holds most of the brand
                 top_sub = Counter(p["sub"] for p in bps if p["sub"]).most_common(1)
                 if top_sub and top_sub[0][1] >= 0.6 * len(bps):
+                    if (c, top_sub[0][0]) in subs:
+                        sub_redirects[f"/{c}/{bs}/"] = f"/{c}/{top_sub[0][0]}/"
                     continue
                 brand_subs[(c, bs)] = (b, bps)
     S.subs = {k: X.sub_name(*k) for k in subs}
     S.brand_subs = {k: v[0] for k, v in brand_subs.items()}
+    S.sub_redirects = {a: b for a, b in sub_redirects.items() if a not in out.seen}
     S.ctx = {"by_cat": by_cat, "brands": brand_pages, "brand_name": brand_name, "by_sub": subs}
     write_menu(out, S, by_cat, subs, brand_subs)
 
@@ -331,6 +334,8 @@ def main():
     preload = (f"  Link: </assets/{css_name}>; rel=preload; as=style, </fonts/body.woff2>; rel=preload; as=font; type=font/woff2; crossorigin, "
                f"</fonts/display.woff2>; rel=preload; as=font; type=font/woff2; crossorigin\n")
     html_cache = "  Cache-Control: public, max-age=300, stale-while-revalidate=3600\n"
+    # brand subcategories folded into a hand-written one (Apple -> iPhone) keep their links; Workers allow 2 000 static rules
+    out.write("_redirects", "".join(f"{a} {b} 301\n" for a, b in sorted(S.sub_redirects.items())[:2000]))
     out.write("_headers", "/assets/*\n  Cache-Control: public, max-age=31536000, immutable\n/fonts/*\n  Cache-Control: public, max-age=31536000, immutable\n"
               "/data/*\n  Cache-Control: public, max-age=3600\n  X-Robots-Tag: noindex\n"
               "/img/*\n  Cache-Control: public, max-age=604800, stale-while-revalidate=2592000\n"
