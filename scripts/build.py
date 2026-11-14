@@ -137,8 +137,10 @@ def main():
     gone = C.gone_products(products, state)
     log(f"{n_all} products -> {len(products)} after caps ({C.STATS.get('capped')}), {new} new slugs, {len(gone)} gone pages")
     products.sort(key=pop_key)
+    names = Counter(X.fold(p["name"]) for p in products)
     for p in products:
         p["index"] = len(p["desc"]) >= 120 or len(p["offers"]) > 1
+        p["dup"] = names[X.fold(p["name"])] > 1
 
     go_tpl, _ = GL.local_go(products)
     shop_meta = {s["id"]: {"name": s["name"], "color": s.get("color", "#888"), "domain": s["domain"]} for s in shops}
@@ -492,9 +494,11 @@ def product_page(S, p):
     if p["ean"] and len(p["ean"]) == 13:
         ld["gtin13"] = p["ean"]
     ld = {a: b for a, b in ld.items() if b}
-    nm = R.shorten_mid(p["name"], 44)
-    title = f"{nm} za 0 Kč místo {kc(p['price'])}" + SUFFIX
-    desc_meta = f"{p['name']}: v obchodě {shop['name']} stojí {kc(p['price'])}, u nás si ho koupíš nanečisto za 0 Kč. Přidej do košíku a ušetři celou cenu."
+    tail = f" za 0 Kč místo {kc(p['price'])}"
+    uniq = (f" ({p['color']})" if p["color"] and len(p["color"]) <= 18 else f" ({p['slug'][-6:]})") if p.get("dup") else ""
+    nm = R.shorten_mid(p["name"], max(24, 74 - len(tail) - len(uniq) - len(SUFFIX)))
+    title = nm + uniq + tail + SUFFIX
+    desc_meta = f"{R.shorten(p['name'], 70)}: v obchodě {shop['name']} stojí {kc(p['price'])}, u nás nanečisto za 0 Kč. Přidej do košíku a ušetři celou cenu."
     return S.layout(f"/produkt/{p['slug']}/", title, desc_meta, body, jsonld=[ld], noindex=not p["index"], og_img=imgs[0] if imgs else None,
                     preload_img=main if imgs else None,
                     crumbs=[HOME, (X.DEPTS[d][0], f"/{d}/"), (X.CATS[k][0], f"/{k}/"), (R.shorten(p["name"], 50), f"/produkt/{p['slug']}/")])
@@ -596,7 +600,7 @@ def contact_page(S):
 <p>E-mail: <a href="mailto:{o["email"]}">{o["email"]}</a></p>
 <p>Provozovatel: {o["name"]}, {o["address"]}, IČO {o["ico"]}, {o["vat"]}.</p>
 <p>Objednávky tu nevyřizujeme, protože žádné nejsou. Reklamace skutečných nákupů řeš prosím s obchodem, kde jsi nakupoval.</p></div>"""
-    return S.layout("/kontakt/", "Kontakt" + SUFFIX, "Kontakt na provozovatele KoupímNic.", body, crumbs=[HOME, ("Kontakt", "/kontakt/")])
+    return S.layout("/kontakt/", "Kontakt" + SUFFIX, "Kontakt na provozovatele KoupímNic: e-mail, IČO a adresa. Objednávky nevyřizujeme, protože žádné nejsou.", body, crumbs=[HOME, ("Kontakt", "/kontakt/")])
 
 
 def privacy_page(S):
