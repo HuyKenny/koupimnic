@@ -48,6 +48,8 @@
   }
 
   // ------------------------------------------------------------------ cart actions
+  var WINKS = ["Peněženka nic nepoznala.", "Košík těžkne, účet ne.", "Dobrá volba. Hlavně ta cena na konci.", "Tohle si zasloužíš. Nanečisto.", "Ještě jednu radost?"],
+    winkI = Math.floor(Math.random() * 5);
   function addItem(d, size, quiet, qty) {
     var key = d.id + "|" + (size || ""), add = Math.max(1, Math.min(9, qty || 1));
     var c = cart.slice(), found = false;
@@ -55,7 +57,7 @@
     if (!found) c.unshift({ k: key, id: d.id, n: d.n, b: d.b, p: d.p, w: d.w, i: d.i, s: d.s, g: d.g, u: d.u, c: d.c, size: size || "", q: add });
     setCart(c.slice(0, 40));
     track("add_to_cart", { value: d.p * add, currency: "CZK" });
-    if (!quiet) toast(ICON("check") + "<span>Přidáno do košíku</span><a href=\"/kosik/\">Zobrazit košík</a>");
+    if (!quiet) toast(ICON("check") + "<span>Přidáno do košíku<small>" + WINKS[winkI++ % WINKS.length] + "</small></span><a href=\"/kosik/\">Zobrazit košík</a>");
   }
   document.addEventListener("click", function (e) {
     var a = e.target.closest("[data-add]");
@@ -178,7 +180,7 @@
       + '<p class="pay"><span>Celkem k úhradě</span><b>' + kc(sum) + '</b></p><p class="vat">včetně DPH</p></div>';
   }
   function emptyHtml() {
-    return '<div class="empty"><img src="/img/ui/box-empty.webp" alt="" width="150" height="150"><p><b>Košík je prázdný.</b><br>Vyber si z tisíců produktů.</p>'
+    return '<div class="empty"><img src="/img/ui/box-empty.webp" alt="" width="150" height="150"><p><b>Košík je prázdný.</b><br>Zatím jediná věc, která tu opravdu nic nestojí.</p>'
       + '<p><a class="btn" href="/">Nakupovat</a></p></div>';
   }
   function renderDrawer() {
@@ -365,7 +367,7 @@
   function flowCart(el) {
     if (!cart.length) { el.innerHTML = emptyHtml(); return; }
     el.innerHTML = stepper(1) + '<div class="co-grid"><div>' + linesHtml(cart, true) + '</div><div class="co-side">' + totalsHtml(cartSum())
-      + '<a class="btn btn--lg btn--full" href="/pokladna/">Pokračovat k pokladně</a><p class="muted co-note">Doprava zdarma · Bez registrace</p></div></div>';
+      + '<a class="btn btn--lg btn--full" href="/pokladna/">Pokračovat k pokladně</a><p class="muted co-note">Doprava zdarma · Bez registrace · Bez karty</p></div></div>';
   }
   function optsHtml(name, rows, sel) {
     return '<div class="opts">' + rows.map(function (r) {
@@ -495,7 +497,7 @@
         + '<a class="btn btn--sm btn--ghost" href="' + esc(x.g) + '" rel="sponsored nofollow noopener" target="_blank" data-go="1">Fakt to chci ' + ICON("ext", 14) + '</a><span class="tag-ad">Reklama</span></div></li>';
     }).join("");
     el.innerHTML = '<div class="ord__h"><h1>' + (fresh ? "Doručeno. Uvnitř nic." : "Účtenka") + '</h1><span class="ord__id">' + o.id + "</span></div>"
-      + '<div class="receipt"><span class="stamp">ZAPLACENO<br>NIČÍM</span><h2>KOUPÍMNIC.CZ</h2><p class="c">Nákupní galerie nanečisto</p><p class="c">' + d.toLocaleDateString("cs-CZ") + " " + d.toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" }) + " · č. " + o.id + "</p><hr>"
+      + '<div class="receipt"><span class="stamp">ZAPLACENO<br>NIČÍM</span><h2>KOUPÍMNIC.CZ</h2><p class="c">Dopaminové nakupování nanečisto</p><p class="c">' + d.toLocaleDateString("cs-CZ") + " " + d.toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" }) + " · č. " + o.id + "</p><hr>"
       + items + '<hr><p class="r big"><span>CELKEM</span><span>' + kc(o.total) + '</span></p><p class="r"><span>Sleva za rozum</span><span>−' + kc(o.total) + '</span></p>'
       + '<p class="r big"><span>ZAPLACENO</span><span>0,00' + NB + 'Kč</span></p><hr><p class="saved">NEUTRACENO<b>' + kc(o.total) + "</b></p>"
       + '<p class="c">Doručil: ' + esc(o.courier) + '. Uvnitř: nic, přesně podle objednávky.</p></div>'

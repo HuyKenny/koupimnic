@@ -5,8 +5,11 @@ fictional delivery, open an empty box and get a receipt "neutraceno X Kč". Sist
 
 ## Product rules
 - Kenny 14. 11. (v2): the site must FEEL like a real big e-shop: real prices everywhere (cards, cart, checkout, "Zaplatit 24 549 Kč");
-  the 0 Kč reveal comes only after clicking "Zaplatit". The thin strip `.sim` stays on every page ("nákupní galerie nanečisto"),
-  without mentioning 0 Kč; /jak-to-funguje/ and the footer explain it.
+  the 0 Kč reveal comes only after clicking "Zaplatit".
+- Kenny 15. 11.: the site says up front that it is a DOPAMINE SHOP, like damenic.cz: strip `.sim` on every page
+  ("Dopaminové nakupování nanečisto. Produkty a ceny jsou skutečné, platba a doručení ne."), hero sticker "Dopaminové nakupování",
+  winking perks bar, 4 steps on home, /dopaminove-nakupovani/ explainer (FAQPage). The figure "0 Kč" still appears only after "Zaplatit".
+  Copy voice follows apps/damenic/COPY_GUIDE.md: punchline at the end, concrete over generic, not a joke in every sentence.
 - No payment gateway, never card/bank fields. Address fields in checkout are optional, kept only in a JS variable while the page
   is open (`co.addr`), never written to localStorage, never sent; cleared after "payment". No accounts, no contact form.
 - Cart/orders/savings live in localStorage (`knc:*` keys in static/assets/app.js); nothing is sent to a server.

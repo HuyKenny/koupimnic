@@ -44,7 +44,7 @@ button,input,select{font:inherit;color:inherit}
 .lnk{color:var(--plum);font-weight:600;text-underline-offset:3px}
 
 /* sim strip + header */
-.sim{background:var(--ink);color:#EDE8F2;font-size:13px;text-align:center;padding:7px 16px;line-height:1.35}
+.sim{margin:0;background:var(--ink);color:#EDE8F2;font-size:13px;text-align:center;padding:7px 16px;line-height:1.35}.sim b{color:#fff}.sim a{color:var(--lime);font-weight:600;margin-left:8px;text-underline-offset:3px}.sim__dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--lime);margin-right:8px;vertical-align:1px;box-shadow:0 0 0 3px rgba(200,241,105,.25)}
 .hd{background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:30}
 .hd__in{display:flex;align-items:center;gap:12px;min-height:66px;flex-wrap:wrap;padding-top:8px;padding-bottom:8px}
 .logo{flex:none;display:block}.logo img{height:34px;width:auto}
@@ -105,7 +105,7 @@ button,input,select{font:inherit;color:inherit}
 /* sections, tiles */
 .sec{margin:40px 0}
 .sec__h{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:14px}
-.sec__h h2{margin:0}.sec__h a{font-weight:700;color:var(--plum);text-decoration:none;white-space:nowrap}.sec__h a::after{content:" →"}
+.sec__h h2{margin:0}.sec__h p{margin:4px 0 0;color:var(--muted);font-size:15px}.sec__h a{font-weight:700;color:var(--plum);text-decoration:none;white-space:nowrap}.sec__h a::after{content:" →"}
 .tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:18px 0 26px}
 @media(min-width:700px){.tiles{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media(min-width:1040px){.tiles{grid-template-columns:repeat(6,minmax(0,1fr))}}
@@ -521,3 +521,27 @@ body.drw-open{overflow:hidden}
 .wants .tag-ad{align-self:center}
 .receipt{padding-top:64px}
 .shop>*,.prod>*,.co-grid>*{min-width:0}
+
+/* dopamine framing: sticker, steps, banners, toast wink */
+.sticker{display:inline-block;margin:0 0 16px;background:var(--lime);color:var(--ink);border:2px solid var(--ink);border-radius:8px;padding:5px 12px;
+  font:700 14px/1.2 var(--fm);transform:rotate(-2deg);box-shadow:var(--hard)}
+.how{list-style:none;counter-reset:how;margin:0;padding:0;display:grid;gap:12px;grid-template-columns:repeat(2,1fr)}
+.how li{counter-increment:how;background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:16px 16px 14px;position:relative}
+.how li::before{content:counter(how);display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--plum);color:#fff;font:700 15px var(--fm);margin-bottom:10px}
+.how li:last-child::before{background:var(--lime);color:var(--ink)}
+.how h3{margin:0 0 4px;font-size:17px}.how p{margin:0;color:var(--ink-2);font-size:15px;line-height:1.45}
+@media(min-width:860px){.how{grid-template-columns:repeat(4,1fr)}}
+.banners{display:grid;gap:12px;margin:28px 0 8px}
+.banner{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:118px;padding:16px 18px;border-radius:var(--r);text-decoration:none;color:var(--ink);
+  border:2px solid var(--ink);box-shadow:var(--hard);transition:transform .12s,box-shadow .12s;overflow:hidden}
+.banner:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--ink)}
+.banner span{font-size:15px;line-height:1.4}.banner strong{display:block;font:780 20px/1.15 var(--fd);margin-bottom:4px}
+.banner img{width:96px;height:96px;object-fit:contain;flex:none}
+.banner__big{flex:none;font:700 34px/1 var(--fm);background:#fff;border:2px solid var(--ink);border-radius:10px;padding:10px 10px;transform:rotate(3deg)}
+.banner--plum{background:var(--plum);color:#fff}.banner--lime{background:var(--lime)}.banner--soft{background:var(--plum-soft)}
+@media(min-width:860px){.banners{grid-template-columns:repeat(3,1fr)}}
+.toast small{display:block;font-weight:500;font-size:13px;opacity:.8;margin-top:2px}
+.prose .btn{color:#fff;text-decoration:none}
+@media(max-width:859px){.banner{min-height:0;padding:12px 14px}.banner img{width:64px;height:64px}.banner__big{font-size:24px;padding:8px}.banner strong{font-size:18px}}
+@media(max-width:700px){.perks-bar span:nth-child(n+2){display:none}}
+.sec__h{flex-wrap:wrap;row-gap:4px}.sec__h>div{flex:1 1 220px;min-width:0}

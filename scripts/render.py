@@ -142,7 +142,7 @@ class Site:
 <script type="speculationrules">{{"prefetch":[{{"where":{{"and":[{{"href_matches":"/*"}},{{"not":{{"href_matches":"/go/*"}}}},{{"not":{{"href_matches":"/objednavka/*"}}}}]}},"eagerness":"moderate"}}]}}</script>
 </head><body class="{cls}"{ga}>
 <a class="skip" href="#main">Přeskočit na obsah</a>
-<div class="sim">KoupímNic – nákupní galerie nanečisto. Ceny a produkty jsou skutečné, z českých e-shopů.</div>
+<p class="sim"><span class="sim__dot" aria-hidden="true"></span><b>Dopaminové nakupování nanečisto.</b> Produkty a ceny jsou skutečné, platba a doručení ne.<a href="/jak-to-funguje/">Jak to funguje</a></p>
 <header class="hd"><div class="wrap hd__in">
 <button class="hd__menu" type="button" data-drawer aria-label="Kategorie">{icon("menu", 22)}</button>
 <a class="logo" href="/" aria-label="KoupímNic – úvod"><img src="/img/ui/logo.webp" alt="KoupímNic" width="137" height="36"></a>
@@ -153,13 +153,13 @@ class Site:
 <button class="hd__cart" type="button" data-open-cart aria-label="Košík">{icon("bag", 22)}<span class="hd__sum" data-sum>Košík</span><span class="badge" data-count hidden>0</span></button>
 </div><nav class="dn wrap" aria-label="Oddělení">{nav}</nav>
 <div class="mega" id="mega" hidden><div class="wrap mega__in" id="mega-in"></div></div></header>
-<div class="perks-bar"><div class="wrap"><span>{icon("truck", 16)}Doprava zdarma</span><span>{icon("lock", 16)}Bez registrace</span><span>{icon("check", 16)}Platba až na konci objednávky</span><span>{icon("box", 16)}Doručení ještě dnes</span></div></div>
+<div class="perks-bar"><div class="wrap"><span>{icon("check", 16)}Platíš nanečisto, z účtu nic neodejde</span><span>{icon("box", 16)}Doručení ještě dnes. Uvnitř nic.</span><span>{icon("truck", 16)}Doprava zdarma, nic neváží</span><span>{icon("lock", 16)}Bez registrace, bez karty</span></div></div>
 <div class="orderpill" id="orderpill" hidden></div>
 {bc}<main id="main" class="{'' if 'wide' in cls else ''}">{body}</main>
 <footer class="ft"><div class="wrap ft__in">
-<div><img src="/img/ui/logo.webp" alt="KoupímNic" width="137" height="36" loading="lazy"><p>Nákupní galerie nanečisto. Skutečné produkty a ceny z českých e-shopů, nákup jako všude jinde. Jen na konci se nic nestrhne.</p></div>
+<div><img src="/img/ui/logo.webp" alt="KoupímNic" width="137" height="36" loading="lazy"><p>Dopaminové nakupování nanečisto. Skutečné produkty a ceny z českých e-shopů, košík i kurýr jako doopravdy. Jen se nic nezaplatí a nic nepřijde.</p></div>
 <div><h2>Oddělení</h2><ul>{"".join(f'<li><a href="/{d}/">{E(X.DEPTS[d][0])}</a></li>' for d in NAV if d in self.dept_ok)}</ul></div>
-<div><h2>KoupímNic</h2><ul><li><a href="/jak-to-funguje/">Jak to funguje</a></li><li><a href="/moje-uspory/">Moje úspory</a></li><li><a href="/znacky/">Značky</a></li>
+<div><h2>KoupímNic</h2><ul><li><a href="/jak-to-funguje/">Jak to funguje</a></li><li><a href="/dopaminove-nakupovani/">Dopaminové nakupování</a></li><li><a href="/moje-uspory/">Moje úspory</a></li><li><a href="/znacky/">Značky</a></li>
 <li><a href="/obchody/">Obchody</a></li><li><a href="/kontakt/">Kontakt</a></li><li><a href="/ochrana-osobnich-udaju/">Soukromí a cookies</a></li></ul></div>
 <div><h2>Poctivě</h2><p>KoupímNic je nákup nanečisto: nic tu neprodáváme a z účtu se nic nestrhne. Odkazy „Koupit doopravdy“ vedou do e-shopů a jsou reklamní, když tam nakoupíš, můžeme dostat provizi.</p></div>
 </div><div class="wrap ft__op"><p>Provozovatel: {OPERATOR["name"]}, {OPERATOR["address"]}, IČO {OPERATOR["ico"]}, {OPERATOR["vat"]}. <a href="mailto:{OPERATOR["email"]}">{OPERATOR["email"]}</a>.

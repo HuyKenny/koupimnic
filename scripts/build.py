@@ -291,6 +291,7 @@ def main():
     out.page("/moje-uspory/", flow_page(S, "/moje-uspory/", "Moje úspory", "savings"), None, index=False)
     out.page("/hledat/", flow_page(S, "/hledat/", "Hledat", "search"), None, index=False)
     out.page("/jak-to-funguje/", about_page(S, present), "pages")
+    out.page("/dopaminove-nakupovani/", dopamine_page(S), "pages")
     out.page("/kontakt/", contact_page(S), "pages")
     out.page("/ochrana-osobnich-udaju/", privacy_page(S), "pages")
     out.page("/", home_page(S, products, by_cat, by_dept, subs), "pages")
@@ -594,9 +595,9 @@ def product_page(S, p):
            f'<input type="number" min="1" max="9" value="1" inputmode="numeric" aria-label="Počet kusů"><button type="button" data-qd="1" aria-label="Více">{R.icon("plus", 16)}</button></div>'
            f'<button class="btn btn--lg buy__add" type="button" data-buy="cart">{R.icon("bag", 20)}Do košíku</button></div>'
            f'<button class="btn btn--lg btn--lime buy__now" type="button" data-buy="now">Koupit hned</button>'
-           f'<ul class="perks"><li>{R.icon("truck", 18)}Doprava zdarma</li><li>{R.icon("lock", 18)}Bez registrace, platba až na konci objednávky</li>'
+           f'<ul class="perks"><li>{R.icon("truck", 18)}Doprava zdarma</li><li>{R.icon("lock", 18)}Platíš nanečisto. Cena je skutečná, platba ne.</li>'
            f'<li>{R.icon("undo", 18)}Cena z obchodu {E(shop["name"])}, aktualizováno {TODAY_CZ}</li></ul>{others}'
-           f'<p class="real">Chceš to koupit přímo v obchodě? <a href="{E(o0["go"])}" rel="sponsored nofollow noopener" target="_blank" data-go="{E(o0["shop"])}">Koupit u {E(shop["name"])}</a> '
+           f'<p class="real">Chceš to doopravdy? <a href="{E(o0["go"])}" rel="sponsored nofollow noopener" target="_blank" data-go="{E(o0["shop"])}">Koupit u {E(shop["name"])}</a> '
            f'<span class="tag-ad">Reklama</span></p></div>'
            f'<div class="sticky-buy" data-item="{data}"><div><b>{kc(p["price"])}</b><small>Skladem</small></div>'
            f'<button class="btn" type="button" data-buy="cart">{R.icon("bag", 18)}Do košíku</button></div>')
@@ -638,7 +639,9 @@ def product_page(S, p):
     uniq = (f" ({p['color']})" if p["color"] and len(p["color"]) <= 18 else f" ({p['slug'][-6:]})") if p.get("dup") else ""
     nm = R.shorten_mid(p["name"], max(24, 74 - len(tail) - len(uniq) - len(SUFFIX)))
     title = nm + uniq + tail + SUFFIX
-    desc_meta = f"{R.shorten(p['name'], 80)} za {kc(p['price'])}. Skladem, doprava zdarma. {R.shorten(p['desc'], 70) if p['desc'] else ''}".strip()
+    desc_meta = f"{R.shorten(p['name'], 70)} za {kc(p['price'])}. Kup si to nanečisto, cena z obchodu {shop['name']}."
+    if p["desc"] and 155 - len(desc_meta) > 30:
+        desc_meta += " " + R.shorten(p["desc"], 154 - len(desc_meta))
     return S.layout(f"/produkt/{p['slug']}/", title, desc_meta, body, jsonld=[ld], noindex=not p["index"], og_img=imgs[0] if imgs else None,
                     preload_img=main if imgs else None,
                     crumbs=[HOME, (X.DEPTS[d][0], f"/{d}/"), (X.CATS[k][0], f"/{k}/")]
@@ -668,6 +671,29 @@ def flow_page(S, path, title, kind):
     }
     wide = " flow--wide" if kind == "search" else ""      # results use the full width like every listing
     return S.layout(path, title + SUFFIX, "Nákup nanečisto na KoupímNic.", f'<div class="wrap flow{wide}">{shells[kind]}</div>', noindex=True, cls="is-" + kind)
+
+
+HOME_DESC = ("Dopaminové nakupování: {n} skutečných produktů z českých e-shopů za skutečné ceny. "
+             "Košík, pokladna i kurýr jako doopravdy, jen se nic neplatí.")
+DEPT_NOTE = {
+    "elektronika": "Nejnovější technika bez splátek na dva roky.",
+    "damska-moda": "Šatník se nafoukne, skříň zůstane stejná.",
+    "panska-moda": "Bundy, mikiny a košile. Žehlit se nic nemusí.",
+    "boty": "Krabice od bot bez bot. Klasika.",
+    "doplnky": "Kabelka za průměrný plat. Nosí se nanečisto.",
+    "krasa": "Vůně drahá, flakon prázdný.",
+    "drogerie": "Nákup, na který se jinak nikdo netěší.",
+    "domov": "Kávovar, robot, vysavač. Kuchyňská linka zůstane volná.",
+    "hracky": "Dětská radost za dospělé ceny. Platí se jen ta radost.",
+    "sport": "Kolo, stan, lyže. Pohyb ti nezajistíme, nákup ano.",
+    "zvirata": "Pelíšek, do kterého si pes stejně nelehne.",
+    "knihy": "Knihy, které si nekoupíš, aspoň nebudou vyčítavě stát v knihovně.",
+}
+
+
+def sec_h(title, note, href, label):
+    note = f"<p>{note}</p>" if note else ""
+    return f'<div class="sec__h"><div><h2>{E(title)}</h2>{note}</div><a href="{href}">{E(label)}</a></div>'
 
 
 def home_page(S, products, by_cat, by_dept, subs):
@@ -705,30 +731,47 @@ def home_page(S, products, by_cat, by_dept, subs):
                 seen_b[p["brand"]] += 1
             if len(pick) == 8:
                 break
-        rows += f'<section class="sec"><div class="sec__h"><h2>{E(X.DEPTS[d][0])}</h2><a href="/{d}/">Vše z oddělení</a></div>{S.grid(pick)}</section>'
-    hero = ('<section class="hero"><div class="wrap hero__in"><div class="hero__txt"><p class="eyebrow">KoupímNic</p>'
-            '<h1>Všechno, co chceš.<br><span>Na jednom místě.</span></h1>'
-            f'<p class="lead">{nb(len(products))} produktů z {S.stats["shops"]} českých e-shopů: iPhony, MacBooky, LEGO, tenisky, parfémy. Doprava zdarma a platba až na konci objednávky.</p>'
+        rows += f'<section class="sec">{sec_h(X.DEPTS[d][0], DEPT_NOTE.get(d, ""), f"/{d}/", "Vše z oddělení")}{S.grid(pick)}</section>'
+    n_fmt = nb(len(products))
+    top_off = max((R.discount(p) for p in products), default=0)
+    top_off = min(70, top_off // 10 * 10)
+    hero = ('<section class="hero"><div class="wrap hero__in"><div class="hero__txt"><p class="sticker">Dopaminové nakupování</p>'
+            '<h1>Plný košík.<br><span>Plný účet.</span></h1>'
+            f'<p class="lead">{n_fmt} skutečných produktů z {S.stats["shops"]} českých e-shopů za skutečné ceny. Vybereš, zaplatíš nanečisto, kurýr zazvoní. '
+            'Radost z nákupu dorazí, peníze zůstanou doma.</p>'
             '<p class="hero__cta"><a class="btn btn--lg" href="#vyber">Nakupovat</a><a class="btn btn--lg btn--ghost" href="/kategorie/">Všechny kategorie</a></p>'
             '<p class="hero__saved" data-saved-hero hidden></p></div>'
             '<div class="hero__art"><img src="/img/ui/hero.webp" alt="" width="560" height="480" fetchpriority="high"></div></div></section>')
-    body = (hero + f'<div class="wrap"><section class="sec"><h2>Oddělení</h2>{S.tiles(depts)}</section>'
-            f'<section class="sec"><div class="sec__h"><h2>Oblíbené kategorie</h2><a href="/kategorie/">Všechny kategorie</a></div>{img_tiles(S, prow, "ptiles--scroll")}</section>'
-            f'<section class="sec" id="vyber"><div class="sec__h"><h2>Doporučujeme</h2><a href="/slevy/">Slevy</a></div>{S.grid(picks[:12], first_eager=4)}</section>{rows}'
-            '<section class="honest"><h2>Jak KoupímNic funguje</h2><p>Vybíráš ze skutečných produktů za skutečné ceny, vkládáš do košíku a projdeš pokladnou jako v každém e-shopu. '
-            'Co se stane na konci, uvidíš sám. <a class="lnk" href="/jak-to-funguje/">Víc o KoupímNic</a></p></section></div>')
+    how = ('<section class="sec">' + sec_h("Co se stane v hlavě, když nakupuješ", "Nejlepší část nákupu je ta před ním. Tady ji máš bez účtenky.",
+                                          "/dopaminove-nakupovani/", "Dopaminové nakupování")
+           + '<ol class="how">'
+           f'<li><h3>Vybereš</h3><p>{n_fmt} produktů. Vybírat se dá donekonečna.</p></li>'
+           '<li><h3>Naplníš košík</h3><p>Hodnota roste, výpis z účtu se nehne.</p></li>'
+           '<li><h3>Zaplatíš nanečisto</h3><p>Pokladna jako všude. Kartu nechceme.</p></li>'
+           '<li><h3>Zazvoní kurýr</h3><p>Rozbalíš krabici. Dopamin dorazil, zboží ne.</p></li></ol></section>')
+    banners = ('<section class="banners" aria-label="Výhody">'
+               f'<a class="banner banner--plum" href="/kategorie/"><span><strong>Doprava zdarma</strong> u všech {n_fmt} produktů. Taky proto, že nic nevezeme.</span>'
+               '<img src="/img/ui/courier.webp" alt="" width="120" height="120" loading="lazy"></a>'
+               + (f'<a class="banner banner--lime" href="/slevy/"><span><strong>Slevy až −{top_off}&nbsp;%</strong> na věci, které si stejně nekoupíš.</span>'
+                  f'<b class="banner__big" aria-hidden="true">−{top_off}%</b></a>' if top_off >= 20 else "")
+               + '<a class="banner banner--soft" href="/moje-uspory/"><span><strong>Počítadlo neutracených peněz.</strong> Roste s každým nákupem, který neproběhl.</span>'
+               '<img src="/img/ui/piggy.webp" alt="" width="120" height="120" loading="lazy"></a></section>')
+    body = (hero + f'<div class="wrap">{how}<section class="sec"><h2>Oddělení</h2>{S.tiles(depts)}</section>{banners}'
+            f'<section class="sec">{sec_h("Oblíbené kategorie", "Kam se chodí pro radost.", "/kategorie/", "Všechny kategorie")}{img_tiles(S, prow, "ptiles--scroll")}</section>'
+            f'<section class="sec" id="vyber">{sec_h("Doporučujeme", "Nejlepší věci, které si dnes nekoupíš.", "/slevy/", "Slevy")}{S.grid(picks[:12], first_eager=4)}</section>{rows}</div>')
     ld = [{"@context": "https://schema.org", "@type": "WebSite", "name": "KoupímNic", "url": BASE + "/",
            "potentialAction": {"@type": "SearchAction", "target": BASE + "/hledat/?q={q}", "query-input": "required name=q"}},
-          {"@context": "https://schema.org", "@type": "Organization", "name": "KoupímNic", "url": BASE + "/", "logo": BASE + "/favicon-512.png"}]
-    return S.layout("/", "KoupímNic – elektronika, móda, LEGO a parfémy na jednom místě", f"{nb(len(products))} produktů z českých e-shopů: iPhony, MacBooky, LEGO, tenisky, parfémy. "
-                    "Doprava zdarma, bez registrace, platba až na konci objednávky.", body, jsonld=ld, cls="home")
+          {"@context": "https://schema.org", "@type": "Organization", "name": "KoupímNic", "url": BASE + "/", "logo": BASE + "/favicon-512.png",
+           "slogan": "Dopaminové nakupování nanečisto", "description": HOME_DESC.format(n=n_fmt)}]
+    return S.layout("/", "KoupímNic – dopaminové nakupování nanečisto", HOME_DESC.format(n=n_fmt), body, jsonld=ld, cls="home")
 
 
 def about_page(S, present):
     shops = ", ".join(S.shop(s)["name"] for s in present[:20])
-    body = band("Jak to funguje", "Nakupuješ jako obvykle, jen na konci nezaplatíš a nic nepřijde.") + f"""<div class="wrap prose">
+    body = band("Jak to funguje", "Dopaminové nakupování: nakupuješ jako obvykle, jen na konci nezaplatíš a nic nepřijde.") + f"""<div class="wrap prose">
 <h2>Proč nákup nanečisto</h2><p>Část radosti z nakupování přichází dřív, než věc vůbec držíš v ruce: při vybírání, vkládání do košíku a čekání na kurýra.
 KoupímNic ti nechá právě tuhle část. Produkty jsou skutečné, ceny taky, jen se nikde neplatí.</p>
+<p>Proč to funguje a kde jsou hranice, rozebíráme na stránce <a href="/dopaminove-nakupovani/">Dopaminové nakupování</a>.</p>
 <h2>Co se děje s tvými daty</h2><p>Nic. Košík, objednávky i počítadlo úspor jsou uložené jen v tvém prohlížeči (localStorage). Nemáme účty, nechceme e-mail, adresu ani kartu.
 Když vymažeš data prohlížeče, zmizí i tvoje historie nákupů nanečisto.</p>
 <h2>Odkud jsou produkty</h2><p>Z partnerských e-shopů: {E(shops)} a dalších. Ceny se aktualizují každý den a mezitím se můžou změnit. Obrázky a popisy jsou od obchodů.</p>
@@ -740,6 +783,48 @@ můžeme dostat provizi. Tebe to nestojí nic navíc. Do skutečného nákupu t�
 <a href="https://www.mpsv.cz/web/cz/dluhove-poradenstvi" rel="noopener">dluhových poradnách</a> nebo u svého lékaře.</p></div>"""
     return S.layout("/jak-to-funguje/", "Jak funguje nákup nanečisto" + SUFFIX, "Co je KoupímNic, proč nákup nanečisto, co se děje s daty a jak web vydělává.",
                     body, crumbs=[HOME, ("Jak to funguje", "/jak-to-funguje/")])
+
+
+DOPA_FAQ = [
+    ("Je KoupímNic skutečný e-shop?", "Není. Produkty, fotky a ceny jsou skutečné a přebíráme je z českých e-shopů, ale u nás se nic neprodává, "
+     "nic se neplatí a nic se nedoručí. Košík, pokladna i kurýr jsou hra."),
+    ("Zaplatím na konci opravdu nic?", "Opravdu. Pokladna se neptá na kartu ani na účet a žádnou platební bránu nemáme. "
+     "Jak vypadá konec nákupu, uvidíš, až klikneš na Zaplatit."),
+    ("Proč mě baví nakupovat, i když nic nepřijde?", "Velká část radosti z nákupu přichází při vybírání a čekání, ne až když věc držíš v ruce. "
+     "Tuhle část si tu můžeš užít celou."),
+    ("Co když něco chci doopravdy?", "U produktu je odkaz do obchodu, označený jako reklama. Doporučujeme ale nejdřív karanténu přání: "
+     "dej věc na 72 hodin stranou a pak se rozhodni."),
+    ("Pomůže to při závislosti na nakupování?", "KoupímNic je hra, ne léčba. Když nakupování nemáš pod kontrolou nebo kvůli němu máš dluhy, "
+     "obrať se na odborníka: praktického lékaře, psychologa, adiktologa nebo dluhovou poradnu."),
+]
+
+
+def dopamine_page(S):
+    n = S.stats.get("products_fmt", "")
+    faq = "".join(f"<h3>{E(q)}</h3><p>{E(a)}</p>" for q, a in DOPA_FAQ)
+    body = band("Dopaminové nakupování", "Vybírání, košík, pokladna a kurýr se vším všudy. Jen bez placení a bez balíku.") + f"""<div class="wrap prose">
+<h2>Co je dopaminové nakupování</h2><p>Nakupování, ze kterého si necháš jen tu příjemnou část. Prohlížíš skutečné produkty za skutečné ceny,
+vkládáš je do košíku, projdeš pokladnou a sleduješ kurýra. Na KoupímNic je {E(n)} produktů z českých e-shopů, takže vybírat se dá dlouho.
+Rozdíl je jediný: z účtu nic neodejde a domů nic nepřijde.</p>
+<h2>Smyčka v pěti krocích</h2><ol>
+<li><b>Vybírání.</b> Filtry, značky, slevy. Mozek si začne představovat, jak ti ta věc bude slušet.</li>
+<li><b>Košík.</b> Hodnota roste. Tady je očekávání nejsilnější.</li>
+<li><b>Pokladna.</b> Doprava, platba, shrnutí. Pocit „už to skoro mám“.</li>
+<li><b>Čekání na kurýra.</b> Sledování zásilky je samo o sobě malá zábava.</li>
+<li><b>Rozbalení.</b> Krabice je prázdná. Účtenka ukáže, kolik jsi neutratil a co by se za to dalo mít.</li></ol>
+<h2>Co o tom říká věda (stručně a opatrně)</h2><p>Dopamin není „hormon štěstí“. Souvisí hlavně s očekáváním odměny a s chutí ji získat.
+Proto bývá nejsilnější chvíle před koupí, ne po ní. KoupímNic na tom staví: dává ti očekávání bez výdaje.
+Nejsme lékaři a nic neléčíme. Je to hra, která může ukojit chvilkovou chuť nakupovat.</p>
+<h2>Kdy to hra není: závislost na nakupování</h2><p>Když nakupování nejde zastavit, kupuješ věci, které nepotřebuješ, a máš kvůli tomu dluhy nebo výčitky,
+nepomůže prázdná krabice, ale odborník. Začít se dá u praktického lékaře, psychologa nebo adiktologa.
+S dluhy pomohou <a href="https://www.mpsv.cz/web/cz/dluhove-poradenstvi" rel="noopener">bezplatné dluhové poradny</a>.</p>
+<h2>Časté otázky</h2>{faq}
+<p><a class="btn" href="/">Jít nakupovat nanečisto</a></p></div>"""
+    ld = [{"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [
+        {"@type": "Question", "name": q, "acceptedAnswer": {"@type": "Answer", "text": a}} for q, a in DOPA_FAQ]}]
+    return S.layout("/dopaminove-nakupovani/", "Dopaminové nakupování nanečisto" + SUFFIX,
+                    "Dopaminové nakupování: vybírání, košík, pokladna i kurýr jako doopravdy, jen bez placení. Proč to baví a kdy to už hra není.",
+                    body, jsonld=ld, crumbs=[HOME, ("Dopaminové nakupování", "/dopaminove-nakupovani/")])
 
 
 def contact_page(S):
