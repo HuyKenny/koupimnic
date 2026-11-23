@@ -160,7 +160,18 @@ def main():
         errs = list(pool.map(lambda w: activate(w[1], w[0], w[2]) if w[2] else
                              (None if not wrangler(w[1], w[0]).returncode else f"first deploy of {w[0]} failed"), shards))
         print(f"phase 2: all Workers serve the new build {time.time() - t1:.1f}s after the first switch")
-        errs += list(pool.map(lambda w: routes(w[1], w[0]), versions))
+        # Routes in passes: when the shard plan shifts (a first character moves to another shard), a shard cannot claim
+        # the route until its old owner released it; in one parallel pass that raced and failed (23. 11. 2026: /produkt/f*,
+        # n*, u*, v* ended routed to Workers without those pages -> 404). Retry the failed ones after the others applied.
+        pending, last = list(versions), []
+        for _ in range(len(versions) + 1):
+            res = list(pool.map(lambda w: routes(w[1], w[0]), pending))
+            failed = [w for w, e in zip(pending, res) if e]
+            last = [e for e in res if e]
+            if not failed or len(failed) == len(pending) and _ > 0:
+                break      # all applied, or no progress in this pass
+            pending = failed
+        errs += last
     errs = [e for e in errs if e]
     if errs:
         sys.exit("; ".join(errs))
